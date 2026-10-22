@@ -1,0 +1,33 @@
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+  font: 400 var(--fs-body)/1.5 var(--font-sans);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+h1, h2 { font-family: var(--font-serif); font-weight: 600; margin: 0; }
+h1 { font-size: var(--fs-h1); line-height: 1.2; }
+h2 { font-size: var(--fs-h2); line-height: 1.25; }
+.shell { max-width: 40rem; margin: 0 auto; padding: var(--space-6) var(--space-4); }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--text-muted); }
+.hero-value { font: 600 var(--fs-display)/var(--lh-display) var(--font-serif); margin: 0; }
+.gain { color: var(--positive); }
+.loss { color: var(--negative); }
+.gold-rule { border: 0; height: 1px; background: var(--gold); margin: var(--space-3) 0 var(--space-6); width: 3rem; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: var(--space-6); margin-bottom: var(--space-6);
+  box-shadow: var(--card-highlight), var(--shadow-1);
+}
+.btn {
+  min-height: 48px; padding: 0 var(--space-6); border-radius: var(--radius-input);
+  font: 600 var(--fs-body) var(--font-sans); cursor: pointer;
+  border: 1px solid var(--gold); background: var(--gold); color: var(--on-gold);
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.btn:hover { background: var(--gold-bright); }
+.btn--secondary { background: transparent; color: var(--text); border-color: var(--border); }
+.btn--secondary:hover { background: var(--surface-2); }
