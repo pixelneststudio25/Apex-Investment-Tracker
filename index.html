@@ -2,19 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex">
-  <title>Apex crypto tests</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Apex</title>
+  <meta name="theme-color" content="#0A1020">
+  <script src="/js/theme-init.js"></script>
   <link rel="stylesheet" href="/css/tokens.css">
   <link rel="stylesheet" href="/css/base.css">
-  <link rel="stylesheet" href="/tests/tests.css">
 </head>
 <body>
   <main class="shell">
-    <h1>Crypto tests</h1>
-    <p id="status" class="muted">Running…</p>
-    <pre id="out" class="card"></pre>
+    <h1>Apex</h1>
+    <hr class="gold-rule">
+    <p class="muted">Every asset, on record.</p>
+    <section class="card" aria-label="Token check">
+      <p class="muted">Total current value</p>
+      <p class="hero-value num">₦12,450,000.00</p>
+      <p class="num gain">▲ +₦1,250,000.00 (+11.16%)</p>
+      <p class="num loss">▼ −₦300,000.00 (−2.40%)</p>
+    </section>
+    <button id="theme-toggle" class="btn btn--secondary" type="button">Switch theme</button>
   </main>
-  <script type="module" src="/tests/browser.mjs"></script>
+  <script type="module" src="/js/app.js"></script>
 </body>
 </html>
