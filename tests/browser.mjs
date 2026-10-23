@@ -1,10 +1,13 @@
 import { runTests } from './crypto.test.mjs';
 import { runAuthTests } from './auth.test.mjs';
+import { runEngineTests } from './engine.test.mjs';
 const out = document.getElementById('out');
 const log = (line) => { out.textContent += line + '\n'; };
 const a = await runTests(log);
 log('\n--- account flows ---');
 const b = await runAuthTests(log);
-const failed = a.failed + b.failed;
+log('\n--- calculation engine ---');
+const c = await runEngineTests(log);
+const failed = a.failed + b.failed + c.failed;
 document.getElementById('status').textContent = failed ? `${failed} FAILED` : 'ALL PASSED';
 document.getElementById('status').className = failed ? 'loss' : 'gain';

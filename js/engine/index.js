@@ -1,0 +1,10 @@
+export { EngineError } from './errors.js';
+export { addDays, addMonths, compareDates, daysBetween } from './dates.js';
+export { D, allocate, toKobo } from './money.js';
+export { valueAfter, valueKobo } from './value.js';
+export { scheduleEntries, scheduleTotalKobo } from './schedule.js';
+export { cagr, xirr } from './xirr.js';
+export { investmentMetrics } from './metrics.js';
+export { ownershipOn, partnerShares } from './partners.js';
+export { compareScenarios, horizonEnd, project } from './projection.js';
+export { formatNaira, formatNairaCompact, formatPercent } from './format.js';
