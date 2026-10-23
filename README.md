@@ -26,3 +26,16 @@
 
 ## Phase 0 is done when
 Both Supabase projects have the schema, the RLS test passes, the site deploys on Vercel with the security headers, and both themes render.
+
+## Phase 1, step 2: signup and login (manual check)
+Before testing, in Supabase **Authentication**:
+- Providers > Email: "Confirm email" ON.
+- URL Configuration: Site URL = your Vercel URL; Redirect URLs include the same URL (with and without a trailing slash).
+- Supabase's built-in email sender allows only a few emails per hour. If signup says "too many emails", wait, or add a custom SMTP provider later.
+
+Then on the deployed site:
+1. Create an account with a real inbox. Save the recovery key, confirm two groups, continue.
+2. Open the verification email and click the link (the app asks for your password to unlock).
+3. Sign in. In Supabase Table Editor, `profiles` should have exactly one row for you, containing only encrypted/key fields.
+4. Sign out, then sign in again, and also try a private/incognito window (acts as a new device).
+5. Try a wrong password and an unverified account. Messages should be clear.

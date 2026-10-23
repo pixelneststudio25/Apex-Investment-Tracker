@@ -1,3 +1,6 @@
 import { runTests } from './crypto.test.mjs';
-const { failed } = await runTests();
-process.exit(failed ? 1 : 0);
+import { runAuthTests } from './auth.test.mjs';
+const a = await runTests();
+console.log('\n--- account flows ---');
+const b = await runAuthTests();
+process.exit(a.failed + b.failed ? 1 : 0);
