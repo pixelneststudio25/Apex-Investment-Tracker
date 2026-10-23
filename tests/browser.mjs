@@ -1,6 +1,7 @@
 import { runTests } from './crypto.test.mjs';
 import { runAuthTests } from './auth.test.mjs';
 import { runEngineTests } from './engine.test.mjs';
+import { runStoreTests } from './store.test.mjs';
 const out = document.getElementById('out');
 const log = (line) => { out.textContent += line + '\n'; };
 const a = await runTests(log);
@@ -8,6 +9,8 @@ log('\n--- account flows ---');
 const b = await runAuthTests(log);
 log('\n--- calculation engine ---');
 const c = await runEngineTests(log);
-const failed = a.failed + b.failed + c.failed;
+log('\n--- data layer ---');
+const d = await runStoreTests(log);
+const failed = a.failed + b.failed + c.failed + d.failed;
 document.getElementById('status').textContent = failed ? `${failed} FAILED` : 'ALL PASSED';
 document.getElementById('status').className = failed ? 'loss' : 'gain';
