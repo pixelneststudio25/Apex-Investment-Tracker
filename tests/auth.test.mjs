@@ -25,6 +25,8 @@ function fakeBackend() {
       async getSession() { return { data: { session } }; },
       async signOut() { session = null; return {}; },
       async resend() { return { error: null }; },
+      async resetPasswordForEmail() { return { error: null }; },
+      async updateUser({ password }) { if (!session) return { error: { code: 'no_session' } }; users.get(session.user.email).password = password; return { error: null }; },
     },
     from: () => ({
       async insert(row) {
@@ -32,12 +34,19 @@ function fakeBackend() {
         if (profiles.has(row.user_id)) return { error: { code: '23505' } };
         profiles.set(row.user_id, row); return { error: null };
       },
+      update: (vals) => ({ eq: (_c, v) => {
+        const hit = session?.user.id === v && profiles.has(v);
+        if (hit) profiles.set(v, { ...profiles.get(v), ...vals });
+        const res = { data: hit ? [{ user_id: v }] : [], error: null };
+        return Object.assign(Promise.resolve(res), { select: async () => res });
+      } }),
       select: () => ({ eq: (_c, v) => ({ maybeSingle: async () => ({ data: profiles.get(v) || null, error: null }) }) }),
     }),
   };
   // Simulates clicking the verification link in the email (also signs that browser in).
+  const clickRecoveryLink = (email) => { session = { user: users.get(email.toLowerCase()) }; };
   const clickLink = (email) => { const u = users.get(email.toLowerCase()); u.confirmed = true; session = { user: u }; };
-  return { supabase, users, profiles, clickLink, endSession: () => { session = null; } };
+  return { supabase, users, profiles, clickLink, clickRecoveryLink, endSession: () => { session = null; } };
 }
 
 const tests = [];
@@ -112,6 +121,57 @@ test('account with neither a profile nor local keys reports NO_KEYS', async () =
   await a.auth.signUp({ email: EMAIL, password: PW }); await a.auth.confirmCeremony();
   be.clickLink(EMAIL); be.endSession();
   await rejects(mk(be).auth.signIn({ email: EMAIL, password: PW }), 'NO_KEYS'); // fresh device, never uploaded
+});
+
+async function accountWithProfile(be) {
+  const a = mk(be);
+  const { recoveryKey } = await a.auth.signUp({ email: EMAIL, password: PW });
+  const payload = await encryptRecord(a.auth.state.dek, 'u1', 'rec-1', sample);
+  await a.auth.confirmCeremony(); be.clickLink(EMAIL); be.endSession();
+  await a.auth.signIn({ email: EMAIL, password: PW }); await a.auth.signOut();
+  return { recoveryKey, payload };
+}
+
+test('forgot password: recovery key + new password; old password dies, old data still opens', async () => {
+  const be = fakeBackend(); const { recoveryKey, payload } = await accountWithProfile(be);
+  await mk(be).auth.requestPasswordReset(EMAIL);
+  await mk(be).auth.requestPasswordReset('nobody@example.com'); // must not reveal whether an account exists
+  be.clickRecoveryLink(EMAIL);
+  const r = mk(be); // fresh device, no local keys
+  await r.auth.completeRecovery({ recoveryKey, newPassword: 'a brand new passphrase' });
+  ok(JSON.stringify(await decryptRecord(r.auth.state.dek, 'u1', 'rec-1', payload)) === JSON.stringify(sample));
+  be.endSession();
+  await rejects(mk(be).auth.signIn({ email: EMAIL, password: PW }), 'INVALID_LOGIN');
+  const n = mk(be); await n.auth.signIn({ email: EMAIL, password: 'a brand new passphrase' });
+  ok(JSON.stringify(await decryptRecord(n.auth.state.dek, 'u1', 'rec-1', payload)) === JSON.stringify(sample));
+});
+
+test('forgot password: wrong or mistyped recovery key changes nothing', async () => {
+  const be = fakeBackend(); const { recoveryKey } = await accountWithProfile(be);
+  be.clickRecoveryLink(EMAIL); const r = mk(be);
+  const typo = (recoveryKey[0] === '2' ? '3' : '2') + recoveryKey.slice(1);
+  await rejects(r.auth.completeRecovery({ recoveryKey: typo, newPassword: 'a brand new passphrase' }), 'RECOVERY_KEY_TYPO');
+  const other = (await accountWithProfile(fakeBackend())).recoveryKey; // valid format, wrong account
+  await rejects(r.auth.completeRecovery({ recoveryKey: other, newPassword: 'a brand new passphrase' }), 'WRONG_RECOVERY_KEY');
+  ok(!r.auth.isUnlocked());
+  be.endSession(); ok((await mk(be).auth.signIn({ email: EMAIL, password: PW })).status === 'unlocked', 'old password still works');
+});
+
+test('forgot password: expired link (no session) is refused', async () => {
+  const be = fakeBackend(); const { recoveryKey } = await accountWithProfile(be);
+  be.endSession();
+  await rejects(mk(be).auth.completeRecovery({ recoveryKey, newPassword: 'a brand new passphrase' }), 'NO_SESSION');
+});
+
+test('change password while unlocked: needs the current password; data unaffected', async () => {
+  const be = fakeBackend(); const { payload } = await accountWithProfile(be);
+  const a = mk(be); await a.auth.signIn({ email: EMAIL, password: PW });
+  await rejects(a.auth.changePasswordUnlocked({ currentPassword: 'not it at all', newPassword: 'another passphrase!' }), 'INVALID_LOGIN');
+  await a.auth.changePasswordUnlocked({ currentPassword: PW, newPassword: 'another passphrase!' });
+  be.endSession();
+  await rejects(mk(be).auth.signIn({ email: EMAIL, password: PW }), 'INVALID_LOGIN');
+  const b = mk(be); await b.auth.signIn({ email: EMAIL, password: 'another passphrase!' });
+  ok(JSON.stringify(await decryptRecord(b.auth.state.dek, 'u1', 'rec-1', payload)) === JSON.stringify(sample));
 });
 
 export async function runAuthTests(log = console.log) {

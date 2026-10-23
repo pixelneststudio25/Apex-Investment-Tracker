@@ -113,7 +113,7 @@ export function verifyView({ email, onResend, onSignIn }) {
     resend, note);
 }
 
-export function loginView({ email = '', notice, onSubmit, onResend, onCreate }) {
+export function loginView({ email = '', notice, onSubmit, onResend, onCreate, onForgot }) {
   const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email });
   const p = field({ id: 'password', label: 'Password', type: 'password', autocomplete: 'current-password' });
   const box = alertBox();
@@ -122,6 +122,7 @@ export function loginView({ email = '', notice, onSubmit, onResend, onCreate }) 
   const form = h('form', { class: 'stack', novalidate: true },
     h('h1', {}, 'Welcome back'), h('hr', { class: 'gold-rule' }),
     notice && h('p', { class: 'muted' }, notice), e.node, p.node, box, extra, btn,
+    onForgot && h('button', { class: 'link-btn', type: 'button', onclick: () => onForgot(e.input.value) }, 'Forgot your password?'),
     onCreate && h('button', { class: 'link-btn', type: 'button', onclick: onCreate }, 'Create an account'));
   return wireForm(form, btn, box, 'Unlocking…', async () => {
     extra.replaceChildren();
@@ -144,4 +145,41 @@ export function homeView({ email, onLock, onSignOut }) {
     h('p', { class: 'muted' }, 'Account setup works. Next we add the PIN lock, then your dashboard.'),
     h('button', { class: 'btn', type: 'button', onclick: onLock }, 'Lock'),
     h('button', { class: 'btn btn--secondary', type: 'button', onclick: onSignOut }, 'Sign out'));
+}
+
+export function forgotView({ email = '', onSubmit, onBack }) {
+  const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email });
+  const box = alertBox(); const sent = h('div', { class: 'stack', hidden: true });
+  const btn = h('button', { class: 'btn', type: 'submit' }, 'Send reset link');
+  const form = h('form', { class: 'stack', novalidate: true },
+    h('h1', {}, 'Reset your password'), h('hr', { class: 'gold-rule' }),
+    h('div', { class: 'alert alert--warn' }, h('strong', {}, 'You will need your recovery key. '),
+      'Your data is encrypted with a key only you hold. If you cannot find the recovery key you saved when you created your account, nobody can restore your records.'),
+    e.node, box, btn, h('button', { class: 'link-btn', type: 'button', onclick: onBack }, 'Back to sign in'));
+  wireForm(form, btn, box, 'Sending…', async () => {
+    if (!e.input.checkValidity()) throw invalid('Please enter a valid email address.');
+    await onSubmit(e.input.value);
+    sent.replaceChildren(h('p', {}, 'If an account exists for ', h('strong', {}, e.input.value.trim()), ', a reset link is on its way. Open it in this browser if you can.'));
+    sent.hidden = false; btn.hidden = true;
+  });
+  return h('section', {}, form, sent);
+}
+
+export function recoverView({ email, onSubmit }) {
+  const k = field({ id: 'rkey', label: 'Recovery key', autocomplete: 'off', hint: 'Spaces, hyphens and lowercase are fine.' });
+  const p = field({ id: 'password', label: 'New password', type: 'password', autocomplete: 'new-password', hint: 'At least 10 characters.' });
+  const p2 = field({ id: 'password2', label: 'Confirm new password', type: 'password', autocomplete: 'new-password' });
+  const box = alertBox();
+  const btn = h('button', { class: 'btn', type: 'submit' }, 'Unlock and set new password');
+  const form = h('form', { class: 'stack', novalidate: true },
+    h('h1', {}, 'Choose a new password'), h('hr', { class: 'gold-rule' }),
+    h('p', { class: 'muted' }, 'Reset link verified for ', h('strong', {}, email), '. Enter your recovery key to unlock your data, then choose a new password.'),
+    k.node, p.node, p2.node, box, btn,
+    h('details', {}, h('summary', {}, 'I cannot find my recovery key'),
+      h('p', { class: 'hint' }, 'Apex never holds a copy of your key, so it cannot be recovered or reset by anyone. If you saved it as a file, a printout, or in a password manager, look there. If it is truly lost, the old records cannot be opened.')));
+  return wireForm(form, btn, box, 'Unlocking…', async () => {
+    if (p.input.value.length < 10) throw invalid('Your password needs at least 10 characters.');
+    if (p.input.value !== p2.input.value) throw invalid('The two passwords do not match.');
+    await onSubmit({ recoveryKey: k.input.value, newPassword: p.input.value });
+  });
 }

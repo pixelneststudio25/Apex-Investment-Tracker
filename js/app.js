@@ -1,7 +1,12 @@
 import { createAuth } from './core/auth.js';
 import { kv } from './core/kv.js';
 import { createSupabase } from './core/supabase.js';
-import { ceremonyView, homeView, loginView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
+import { ceremonyView, forgotView, homeView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
+
+// Read the link parameters before the Supabase client consumes and clears them.
+const linkParams = new URLSearchParams(location.hash.slice(1));
+const isRecoveryLink = linkParams.get('type') === 'recovery';
+const hashError = linkParams.get('error_description');
 
 // Theme switcher
 const root = document.documentElement;
@@ -50,13 +55,22 @@ const showVerify = (email) => show(verifyView({
 
 function showLogin({ email = '', notice } = {}) {
   show(loginView({
-    email, notice, onCreate: showSignup, onResend: (e) => auth.resendVerification(e),
+    email, notice, onCreate: showSignup, onResend: (e) => auth.resendVerification(e), onForgot: (e) => showForgot(e),
     onSubmit: async (creds) => {
       const r = await auth.signIn(creds);
       if (r.status === 'ceremony') showCeremony(r.recoveryKey, creds.email); else showHome();
     },
   }));
 }
+
+const showForgot = (email = '') => show(forgotView({
+  email, onSubmit: (e) => auth.requestPasswordReset(e), onBack: () => showLogin({ email }),
+}));
+
+const showRecover = (email) => show(recoverView({
+  email,
+  onSubmit: async (creds) => { await auth.completeRecovery(creds); showHome(); },
+}));
 
 const showHome = () => show(homeView({
   email: auth.state.email,
@@ -65,9 +79,11 @@ const showHome = () => show(homeView({
 }));
 
 (async function boot() {
-  const hashError = new URLSearchParams(location.hash.slice(1)).get('error_description');
   const session = await auth.currentSession();
-  if (hashError) { history.replaceState(null, '', location.pathname); showLogin({ notice: 'That link has expired or was already used. Sign in, and we can send a new one.' }); }
+  history.replaceState(null, '', location.pathname);
+  if (hashError) showLogin({ notice: 'That link has expired or was already used. Sign in, or use "Forgot your password?" for a new one.' });
+  else if (isRecoveryLink && session) showRecover(session.user.email);
+  else if (isRecoveryLink) showForgot();
   else if (session) showLogin({ email: session.user.email, notice: 'Welcome back. Enter your password to unlock Apex.' });
   else showWelcome();
 })();
