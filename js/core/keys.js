@@ -102,7 +102,10 @@ export async function formatRecoveryKey(bytes) {
 
 // Accepts any case, spaces or hyphens; fixes the usual look-alikes (O->0, I/L->1).
 export async function parseRecoveryKey(input) {
-  const s = String(input).toUpperCase().replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
+  // If the whole saved file (or any surrounding text) was pasted, pick out the 14 groups of 4.
+  const upper = String(input).toUpperCase();
+  const found = upper.match(/(?:[0-9A-Z]{4}[\s-]+){13}[0-9A-Z]{4}/);
+  const s = (found ? found[0] : upper).replace(/[\s-]/g, '').replace(/O/g, '0').replace(/[IL]/g, '1');
   if (s.length !== 56) throw new CryptoError('RECOVERY_KEY_FORMAT', 'Recovery key has the wrong length');
   const bytes = b32decode(s.slice(0, 52));
   if (bytes.length !== 32 || s.slice(52) !== await checksum(bytes)) {

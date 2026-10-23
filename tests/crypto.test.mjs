@@ -69,6 +69,12 @@ test('recovery key: a typo is caught by the checksum, wrong length is rejected',
   await rejects(parseRecoveryKey(text.slice(0, 20)), 'RECOVERY_KEY_FORMAT');
 });
 
+test('recovery key: the whole downloaded sheet can be pasted and the key is found in it', async () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const key = await formatRecoveryKey(bytes);
+  const sheet = `APEX RECOVERY KEY\n\n${key}\n\nCreated: Fri Oct 23 2026\n\nKeep this somewhere safe and private (a locked drawer or safe).\n`;
+  ok((await parseRecoveryKey(sheet)).every((b, i) => b === bytes[i]));
+});
 test('signup then login on a "new device" recovers the same DEK', async () => {
   const acct = await createAccountKeys(PW, EMAIL, FAST);
   const { dek } = await unlockWithPassword(PW, EMAIL, acct.profileKeys);

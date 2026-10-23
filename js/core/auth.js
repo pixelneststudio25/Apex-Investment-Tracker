@@ -2,10 +2,11 @@
 // so the flows can be tested with fakes (tests/auth.test.mjs).
 import { CryptoError, DEFAULT_KDF } from './crypto.js';
 import {
-  changePassword as rewrapForPassword, createAccountKeys, deriveLoginSecrets, normalizeEmail,
-  recoverWithKey, rotateRecoveryKey, unwrapDekWithKek,
+  DEFAULT_PIN_ITERATIONS, changePassword as rewrapForPassword, createAccountKeys, deriveLoginSecrets,
+  normalizeEmail, recoverWithKey, rotateRecoveryKey, unwrapDekWithKek, unwrapDekWithPin, wrapDekWithPin,
 } from './keys.js';
 
+export const MAX_PIN_ATTEMPTS = 5;
 export const CONSENT_VERSION = 'draft-1'; // TODO: replace after legal review of the privacy notice
 
 export class AuthError extends Error {
@@ -29,15 +30,19 @@ function mapError(e) {
 }
 
 function keyError(e) {
-  if (e instanceof CryptoError && (e.code === 'RECOVERY_KEY_FORMAT' || e.code === 'RECOVERY_KEY_CHECKSUM')) {
-    return new AuthError('RECOVERY_KEY_TYPO', 'That recovery key does not look right. Please check it for typos.');
+  if (e instanceof CryptoError && e.code === 'RECOVERY_KEY_FORMAT') {
+    return new AuthError('RECOVERY_KEY_TYPO', 'That does not look like a recovery key. It has 14 groups of 4 letters and numbers, like ABCD-EFGH-JKMN-…');
+  }
+  if (e instanceof CryptoError && e.code === 'RECOVERY_KEY_CHECKSUM') {
+    return new AuthError('RECOVERY_KEY_TYPO', 'The key has the right shape but contains a typo. Compare each group with your saved copy.');
   }
   if (e instanceof CryptoError) return new AuthError('WRONG_RECOVERY_KEY', 'That recovery key does not match this account.');
   return e instanceof AuthError ? e : new AuthError('AUTH_ERROR', 'Something went wrong.');
 }
 
-export function createAuth({ supabase, kv, kdf = DEFAULT_KDF, redirectTo = '/' }) {
+export function createAuth({ supabase, kv, kdf = DEFAULT_KDF, redirectTo = '/', pinIterations = DEFAULT_PIN_ITERATIONS }) {
   const state = { dek: null, userId: null, email: null };
+  let pendingRotation = null; // new recovery_wrapped_dek, saved only after the user confirms the new key
 
   async function sessionFor(email) {
     const { data } = await supabase.auth.getSession();
@@ -72,6 +77,27 @@ export function createAuth({ supabase, kv, kdf = DEFAULT_KDF, redirectTo = '/' }
     const { error: uerr } = await supabase.auth.updateUser({ password: next.authSecret });
     if (uerr) throw mapError(uerr);
     await supabase.auth.signOut({ scope: 'others' }); // sign out every other device
+  }
+
+  // Counts the attempt BEFORE checking it (stored on disk), so closing the page cannot reset the counter.
+  async function pinUnwrap(pin) {
+    if (!/^\d{4}$/.test(String(pin))) throw new AuthError('WRONG_PIN', 'Enter your 4-digit PIN.');
+    const rec = await kv.get('pin');
+    if (!rec) throw new AuthError('NO_PIN', 'No PIN is set on this device.');
+    const failed = (rec.failed || 0) + 1;
+    await kv.set('pin', { ...rec, failed });
+    try {
+      const dek = await unwrapDekWithPin(pin, rec);
+      await kv.set('pin', { ...rec, failed: 0 });
+      return { dek, rec };
+    } catch {
+      if (failed >= MAX_PIN_ATTEMPTS) {
+        await kv.delete('pin');
+        throw new AuthError('PIN_WIPED', 'Too many incorrect PINs. For your protection the PIN was removed from this device. Please sign in with your password.');
+      }
+      const left = MAX_PIN_ATTEMPTS - failed;
+      throw new AuthError('WRONG_PIN', `Incorrect PIN. ${left} attempt${left === 1 ? '' : 's'} left.`);
+    }
   }
 
   return {
@@ -177,7 +203,62 @@ export function createAuth({ supabase, kv, kdf = DEFAULT_KDF, redirectTo = '/' }
       await applyNewPassword(state.dek, state.email, state.userId, newPassword);
     },
 
-    lock() { state.dek = null; },
-    async signOut() { state.dek = null; state.userId = null; state.email = null; await supabase.auth.signOut(); },
+    // ---------- PIN (per device) ----------
+    async pinInfo() {
+      const r = await kv.get('pin');
+      return r ? { userId: r.userId, email: r.email, attemptsLeft: MAX_PIN_ATTEMPTS - (r.failed || 0) } : null;
+    },
+    async setPin(pin) {
+      if (!state.dek) throw new AuthError('LOCKED', 'Unlock Apex first.');
+      const blob = await wrapDekWithPin(state.dek, pin, pinIterations);
+      await kv.set('pin', { ...blob, userId: state.userId, email: state.email, failed: 0 });
+    },
+    async unlockWithPin(pin) {
+      const { dek, rec } = await pinUnwrap(pin);
+      Object.assign(state, { dek, userId: rec.userId, email: rec.email });
+    },
+    async removePin() { await kv.delete('pin'); },
+
+    // Forgot password, but this device still holds a PIN-protected key (Addendum A.1).
+    // The reset email proves control of the address; the PIN proves access to the data.
+    async completeRecoveryWithPin({ pin, newPassword }) {
+      const session = await this.currentSession();
+      if (!session) throw new AuthError('NO_SESSION', 'This reset link has expired or was already used. Please request a new one.');
+      const rec = await kv.get('pin');
+      if (!rec || rec.userId !== session.user.id) throw new AuthError('NO_PIN', 'This device has no PIN for this account. Use your recovery key instead.');
+      const { dek } = await pinUnwrap(pin);
+      await applyNewPassword(dek, session.user.email, session.user.id, newPassword);
+      Object.assign(state, { dek, userId: session.user.id, email: normalizeEmail(session.user.email) });
+      const { recoveryKey } = await this.beginRecoveryRotation();
+      return { status: 'ceremony', recoveryKey };
+    },
+
+    // ---------- recovery key care (Addendum A.2) ----------
+    // The new key only replaces the old one after the user confirms they saved it.
+    async beginRecoveryRotation() {
+      if (!state.dek) throw new AuthError('LOCKED', 'Unlock Apex first.');
+      const rot = await rotateRecoveryKey(state.dek);
+      pendingRotation = rot.recovery_wrapped_dek;
+      return { recoveryKey: rot.recoveryKey };
+    },
+    async commitRecoveryRotation() {
+      if (!pendingRotation) throw new AuthError('NO_PENDING', 'Nothing to confirm.');
+      const { data, error } = await supabase.from('profiles').update({ recovery_wrapped_dek: pendingRotation }).eq('user_id', state.userId).select('user_id');
+      if (error) throw mapError(error);
+      if (!data?.length) throw new AuthError('SAVE_FAILED', 'Could not save your new recovery key. Please try again.');
+      pendingRotation = null;
+    },
+    async verifyRecoveryKey(text) {
+      const { data: profile, error } = await supabase.from('profiles').select('*').eq('user_id', state.userId).maybeSingle();
+      if (error) throw mapError(error);
+      if (!profile) throw new AuthError('NO_PROFILE', 'Your keys have not been backed up yet. Verify your email first.');
+      try { await recoverWithKey(text, profile.recovery_wrapped_dek); } catch (e) { throw keyError(e); }
+    },
+
+    lock() { state.dek = null; pendingRotation = null; },
+    async signOut() { // signing out also forgets this device's PIN
+      state.dek = null; state.userId = null; state.email = null; pendingRotation = null;
+      await kv.delete('pin'); await supabase.auth.signOut();
+    },
   };
 }

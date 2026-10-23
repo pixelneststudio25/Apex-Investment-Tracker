@@ -138,14 +138,6 @@ export function loginView({ email = '', notice, onSubmit, onResend, onCreate, on
   });
 }
 
-export function homeView({ email, onLock, onSignOut }) {
-  return h('section', { class: 'stack' },
-    h('h1', {}, 'Your vault is unlocked'), h('hr', { class: 'gold-rule' }),
-    h('p', {}, 'Signed in as ', h('strong', {}, email), '.'),
-    h('p', { class: 'muted' }, 'Account setup works. Next we add the PIN lock, then your dashboard.'),
-    h('button', { class: 'btn', type: 'button', onclick: onLock }, 'Lock'),
-    h('button', { class: 'btn btn--secondary', type: 'button', onclick: onSignOut }, 'Sign out'));
-}
 
 export function forgotView({ email = '', onSubmit, onBack }) {
   const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email });
@@ -165,21 +157,58 @@ export function forgotView({ email = '', onSubmit, onBack }) {
   return h('section', {}, form, sent);
 }
 
-export function recoverView({ email, onSubmit }) {
+export function recoverView({ email, hasPin, onSubmit }) {
+  let mode = 'key';
   const k = field({ id: 'rkey', label: 'Recovery key', autocomplete: 'off', hint: 'Spaces, hyphens and lowercase are fine.' });
+  const pn = field({ id: 'rpin', label: 'PIN on this device', type: 'password', autocomplete: 'off', inputmode: 'numeric', hint: 'The 4-digit PIN you use to unlock Apex here.' });
+  pn.input.required = false; k.input.required = false;
+  const pinBox = h('div', { hidden: true }, pn.node), keyBox = h('div', {}, k.node);
   const p = field({ id: 'password', label: 'New password', type: 'password', autocomplete: 'new-password', hint: 'At least 10 characters.' });
   const p2 = field({ id: 'password2', label: 'Confirm new password', type: 'password', autocomplete: 'new-password' });
   const box = alertBox();
   const btn = h('button', { class: 'btn', type: 'submit' }, 'Unlock and set new password');
+  const swap = h('button', { class: 'link-btn', type: 'button', hidden: !hasPin }, 'Use my PIN on this device instead');
+  swap.addEventListener('click', () => {
+    mode = mode === 'key' ? 'pin' : 'key';
+    keyBox.hidden = mode === 'pin'; pinBox.hidden = mode === 'key';
+    swap.textContent = mode === 'key' ? 'Use my PIN on this device instead' : 'Use my recovery key instead';
+  });
   const form = h('form', { class: 'stack', novalidate: true },
     h('h1', {}, 'Choose a new password'), h('hr', { class: 'gold-rule' }),
-    h('p', { class: 'muted' }, 'Reset link verified for ', h('strong', {}, email), '. Enter your recovery key to unlock your data, then choose a new password.'),
-    k.node, p.node, p2.node, box, btn,
+    h('p', { class: 'muted' }, 'Reset link verified for ', h('strong', {}, email), '. Unlock your data with your recovery key', hasPin ? ' or the PIN on this device' : '', ', then choose a new password.'),
+    keyBox, pinBox, swap, p.node, p2.node, box, btn,
     h('details', {}, h('summary', {}, 'I cannot find my recovery key'),
-      h('p', { class: 'hint' }, 'Apex never holds a copy of your key, so it cannot be recovered or reset by anyone. If you saved it as a file, a printout, or in a password manager, look there. If it is truly lost, the old records cannot be opened.')));
+      h('p', { class: 'hint' }, 'Apex never holds a copy of your key, so it cannot be recovered or reset by anyone. Look for the file, printout or password-manager entry you saved at signup. If it is truly lost, the old records cannot be opened.')));
   return wireForm(form, btn, box, 'Unlocking…', async () => {
     if (p.input.value.length < 10) throw invalid('Your password needs at least 10 characters.');
     if (p.input.value !== p2.input.value) throw invalid('The two passwords do not match.');
-    await onSubmit({ recoveryKey: k.input.value, newPassword: p.input.value });
+    if (mode === 'pin') await onSubmit({ mode, pin: pn.input.value, newPassword: p.input.value });
+    else await onSubmit({ mode, recoveryKey: k.input.value, newPassword: p.input.value });
   });
+}
+
+export function checkKeyView({ onSubmit, onBack }) {
+  const k = field({ id: 'rkey', label: 'Recovery key', autocomplete: 'off', hint: 'Paste or type the key you saved. Spaces, hyphens and lowercase are fine.' });
+  const box = alertBox(); const good = h('div', { class: 'alert alert--ok', role: 'status', hidden: true });
+  const btn = h('button', { class: 'btn', type: 'submit' }, 'Check my key');
+  const form = h('form', { class: 'stack', novalidate: true },
+    h('h1', {}, 'Check your recovery key'), h('hr', { class: 'gold-rule' }),
+    h('p', { class: 'muted' }, 'This confirms your saved key really opens your data, without changing anything.'),
+    k.node, box, good, btn, h('button', { class: 'link-btn', type: 'button', onclick: onBack }, 'Back'));
+  return wireForm(form, btn, box, 'Checking…', async () => {
+    good.hidden = true; await onSubmit(k.input.value);
+    good.textContent = 'This recovery key is correct. Keep it safe.'; good.hidden = false;
+  });
+}
+
+export function homeView({ email, onLock, onSignOut, onCheckKey, onRotateKey, onSetPin }) {
+  return h('section', { class: 'stack' },
+    h('h1', {}, 'Your vault is unlocked'), h('hr', { class: 'gold-rule' }),
+    h('p', {}, 'Signed in as ', h('strong', {}, email), '.'),
+    h('p', { class: 'muted' }, 'Security is set up. Next we build your dashboard and investments.'),
+    h('button', { class: 'btn', type: 'button', onclick: onLock }, 'Lock now'),
+    h('button', { class: 'btn btn--secondary', type: 'button', onclick: onCheckKey }, 'Check my recovery key'),
+    h('button', { class: 'btn btn--secondary', type: 'button', onclick: onRotateKey }, 'Create a new recovery key'),
+    h('button', { class: 'btn btn--secondary', type: 'button', onclick: onSetPin }, 'Set or change PIN'),
+    h('button', { class: 'link-btn', type: 'button', onclick: onSignOut }, 'Sign out'));
 }

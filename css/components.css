@@ -39,3 +39,26 @@
 @media (min-width: 520px) { .recovery-grid { grid-template-columns: repeat(4, 1fr); } }
 
 .stack > .btn { width: 100%; }
+
+.alert--ok { border-color: var(--positive); color: var(--positive); }
+details { border-top: 1px solid var(--border); padding-top: var(--space-3); font-size: var(--fs-small); }
+summary { cursor: pointer; min-height: var(--tap-min); display: flex; align-items: center; }
+
+/* PIN pad */
+.pin-view { text-align: center; }
+.pin-view .gold-rule { margin-inline: auto; }
+.pin-pad { max-width: 20rem; margin: var(--space-6) auto 0; }
+.pin-dots { display: flex; justify-content: center; gap: var(--space-4); margin-bottom: var(--space-3); }
+.pin-dot { width: 14px; height: 14px; border-radius: var(--radius-pill); border: 1.5px solid var(--gold); transition: background var(--dur-fast) var(--ease-out); }
+.pin-dot.on { background: var(--gold); }
+.pin-msg { min-height: 1.5em; font-size: var(--fs-small); color: var(--text-muted); margin: 0 0 var(--space-4); }
+.pin-msg--error { color: var(--negative); }
+.pin-keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-3); }
+.pin-key {
+  min-height: 64px; border-radius: var(--radius-card); border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); font: 500 calc(1.5rem * var(--text-scale)) var(--font-sans); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-out);
+}
+.pin-key:hover, .pin-key:active { background: var(--surface-2); }
+.shake { animation: shake var(--dur-slow) var(--ease-in-out); }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
