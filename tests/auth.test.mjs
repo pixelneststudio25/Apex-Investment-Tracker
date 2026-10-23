@@ -174,6 +174,15 @@ test('change password while unlocked: needs the current password; data unaffecte
   ok(JSON.stringify(await decryptRecord(b.auth.state.dek, 'u1', 'rec-1', payload)) === JSON.stringify(sample));
 });
 
+test('network failure gives a clear message and changes nothing', async () => {
+  const be = fakeBackend(); const { recoveryKey } = await accountWithProfile(be);
+  be.clickRecoveryLink(EMAIL);
+  const down = { ...be.supabase, from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: { message: 'TypeError: Failed to fetch' } }) }) }) }) };
+  const a = createAuth({ supabase: down, kv: fakeKv(), kdf: FAST });
+  await rejects(a.completeRecovery({ recoveryKey, newPassword: 'a brand new passphrase' }), 'NETWORK');
+  be.endSession(); ok((await mk(be).auth.signIn({ email: EMAIL, password: PW })).status === 'unlocked', 'old password unaffected');
+});
+
 export async function runAuthTests(log = console.log) {
   let passed = 0, failed = 0;
   for (const t of tests) {

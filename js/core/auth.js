@@ -20,6 +20,10 @@ const FRIENDLY = {
   user_already_exists: ['EXISTS', 'An account with this email already exists. Try signing in.'],
 };
 function mapError(e) {
+  const msg = String(e?.message || '');
+  if (e?.name === 'AuthRetryableFetchError' || /failed to fetch|networkerror|network request failed|load failed/i.test(msg)) {
+    return new AuthError('NETWORK', 'Apex could not reach the server. Check your internet connection and try again. Nothing was changed.');
+  }
   const hit = FRIENDLY[e?.code];
   return hit ? new AuthError(hit[0], hit[1]) : new AuthError('AUTH_ERROR', e?.message || 'Something went wrong.');
 }
