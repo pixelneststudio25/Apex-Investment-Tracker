@@ -115,3 +115,44 @@ html.dialog-open { overflow: hidden; }
 @keyframes sheet-out { to { transform: translateY(100%); } }
 @keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
 @keyframes dialog-out { to { opacity: 0; transform: scale(0.97); } }
+
+/* ======== 4E: onboarding polish ======== */
+/* Choice chips never overflow: segments share the width equally and their words wrap instead of running out. */
+.wizard .seg, .settings .seg, .form-page .seg { display: flex; width: 100%; }
+.wizard .seg button, .settings .seg button, .form-page .seg button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 8px var(--space-2); white-space: normal; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; }
+
+/* Header: a quiet close, a count, a slim progress bar. */
+.wizard-top { align-items: center; }
+.wizard-count { margin: 0; color: var(--text-muted); font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+.wizard-count strong { color: var(--text); font-weight: 600; }
+.progress { gap: 6px; margin-top: var(--space-4); }
+.progress span { height: 4px; border-radius: 4px; }
+.wizard-head { margin-top: var(--space-8); }
+.wizard-title { font-size: calc(2.15rem * var(--text-scale)); line-height: 1.08; letter-spacing: -0.02em; }
+.wizard-lede { margin: var(--space-3) 0 0; max-width: 30rem; color: var(--text-muted); font-size: var(--fs-body); line-height: 1.5; text-wrap: pretty; }
+.wizard-body { margin-top: var(--space-8); }
+.step-in { animation: rise var(--dur-slow) var(--ease-out) both; }
+.wizard-body.step-in { animation-delay: 60ms; }
+
+/* More air between each question and its answer, and between one question and the next. */
+.wizard .stack > * + * { margin-top: var(--space-6); }
+.wizard .field > label, .wizard .field-label { display: block; margin-bottom: var(--space-3); font-weight: 600; }
+.wizard .field .hint { margin-top: var(--space-2); }
+.wizard .subsection { margin-top: var(--space-8); padding-top: var(--space-8); }
+.wizard .subsection > h2 { margin-bottom: var(--space-2); }
+
+/* Big choices: an icon tile on the left, words on the right. */
+.choices { gap: var(--space-3); }
+.choice { flex-direction: row; align-items: center; gap: var(--space-3); min-height: 68px; padding: var(--space-3) 3.1rem var(--space-3) var(--space-3); }
+.choice-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.choice:not(.choice--icon) { padding-left: var(--space-4); }
+.choice-ico { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--surface-2); color: var(--accent); transition: background var(--dur-fast) var(--ease-out); }
+.choice[aria-checked="true"] .choice-ico { background: var(--surface); }
+.cat { min-height: 68px; font-size: var(--fs-body); }
+.cat .tile { width: 42px; height: 42px; }
+
+/* Footer buttons: Back stays small, the main button takes the room and never wraps. */
+.row > .btn--back { flex: 0 0 auto; min-width: 6.5rem; padding-inline: var(--space-6); }
+.row > .btn--grow { flex: 1 1 0; white-space: nowrap; }
+.sticky-actions .btn { white-space: nowrap; }
+.wizard-foot { gap: var(--space-3); }

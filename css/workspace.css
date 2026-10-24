@@ -348,3 +348,46 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 @media (max-width: 340px) { .topbar .icon-btn { width: 40px; } }
 /* First-run card on phones: the two buttons sit one above the other at full width, so their labels stay on one line. */
 @media (max-width: 519.98px) { .empty--hero .row { flex-direction: column; } .empty--hero .row > .btn { flex: none; width: 100%; } }
+
+/* ======== 4E: Home ======== */
+.home-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--space-3); }
+.home-greet { margin: 0 0 2px; color: var(--text-muted); font-size: var(--fs-small); font-weight: 500; }
+.chip--plain { margin-left: 0; padding: 6px 12px; font-size: var(--fs-caption); vertical-align: baseline; }
+
+.qa-row { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--space-2); margin-top: var(--space-6); }
+.qa { display: flex; flex-direction: column; align-items: center; gap: var(--space-2); padding: 0; border: 0; background: none; color: var(--text); text-decoration: none; cursor: pointer; font: 500 var(--fs-caption)/1.2 var(--font-sans); touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.qa-ico { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-2); color: var(--accent); transition: transform var(--dur-base) var(--ease-spring), background var(--dur-fast) var(--ease-out); }
+.qa:active .qa-ico { transform: scale(0.92); transition-duration: var(--dur-instant); }
+@media (hover: hover) { .qa:hover .qa-ico { background: var(--accent-soft); } }
+.qa-label { color: var(--text-muted); }
+.growth-note--plain { margin: var(--space-4) 0 0; max-width: none; text-align: left; }
+
+.see-all { display: inline-flex; align-items: center; min-height: var(--tap-min); color: var(--accent); font: 500 var(--fs-small) var(--font-sans); text-decoration: none; }
+.cards { display: flex; gap: var(--space-3); margin: 0 calc(var(--space-4) * -1); padding: 0 var(--space-4) var(--space-2); list-style: none; overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding-inline: var(--space-4); scrollbar-width: none; }
+.cards::-webkit-scrollbar { display: none; }
+.cards > li { flex: none; scroll-snap-align: start; }
+@media (min-width: 1024px) { .cards { margin-inline: 0; padding-inline: 0; scroll-padding-inline: 0; } }
+.inv-card { display: flex; flex-direction: column; align-items: flex-start; width: 11.5rem; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--card-highlight), var(--shadow-1); color: inherit; text-decoration: none; transition: transform var(--dur-base) var(--ease-spring), border-color var(--dur-fast) var(--ease-out); }
+.inv-card:active { transform: scale(0.98); transition-duration: var(--dur-instant); }
+@media (hover: hover) { .inv-card:hover { border-color: var(--border-strong); } }
+.inv-card .tile { margin-bottom: var(--space-3); }
+.inv-card-name, .inv-card-sub { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.inv-card-name { font-weight: 600; }
+.inv-card-sub { color: var(--text-muted); font-size: var(--fs-caption); }
+.inv-card-val { margin: var(--space-3) 0 var(--space-2); font: 500 var(--fs-h3)/1.2 var(--font-serif); }
+
+/* The checklist is one slim line; it opens in place. */
+.setup { padding: var(--space-2) var(--space-4); }
+.setup-toggle { display: flex; align-items: center; gap: var(--space-3); width: 100%; min-height: 60px; padding: 0; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.setup-toggle-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.setup-toggle-text .sub { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setup-toggle > .icon { flex: none; color: var(--text-muted); transition: transform var(--dur-base) var(--ease-out); }
+.setup-toggle[aria-expanded="true"] > .icon { transform: rotate(90deg); }
+.setup-ring { position: relative; flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p, 0) * 1turn), var(--border) 0); font: 600 11px var(--font-sans); font-variant-numeric: tabular-nums; }
+.setup-ring::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--surface); }
+.setup-ring > span { position: relative; }
+.setup-more { padding-bottom: var(--space-2); }
+.setup-foot { display: flex; justify-content: flex-end; }
+
+.dash-main, .dash-side { grid-template-columns: minmax(0, 1fr); } /* a wide child (the cards strip) must scroll inside its own box, never stretch the page */
+.dash-main > *, .dash-side > * { min-width: 0; }

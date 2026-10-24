@@ -1,6 +1,7 @@
 // Small building blocks for forms. Every field has a visible label, an optional hint, and its own error line
 // that screen readers announce. No inline styles and no innerHTML (the page's security policy forbids both).
 import { h } from './dom.js';
+import { icon } from './icons.js';
 import { parseNaira } from '../models/inputs.js';
 import { money } from './fmt.js';
 
@@ -75,12 +76,13 @@ export function percentField(label, { value = '', onInput, hint, optional = fals
 }
 
 // A group of big choices (radio behaviour). options: [[value, title, description?]]
-export function choiceList({ name, options, value, onChange, label }) {
+export function choiceList({ name, options, value, onChange, label, icons = {} }) {
   const box = h('div', { class: 'choices', role: 'radiogroup', 'aria-label': label });
   const draw = (current) => [...box.children].forEach((b) => { const on = b.dataset.v === current; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
   for (const [v, title, desc] of options) {
-    const b = h('button', { class: 'choice', type: 'button', role: 'radio', 'data-v': v, 'aria-checked': 'false', name },
-      h('span', { class: 'choice-title' }, title), desc && h('span', { class: 'choice-desc' }, desc));
+    const b = h('button', { class: `choice${icons[v] ? ' choice--icon' : ''}`, type: 'button', role: 'radio', 'data-v': v, 'aria-checked': 'false', name },
+      icons[v] && h('span', { class: 'choice-ico', 'aria-hidden': 'true' }, icon(icons[v], { size: 20 })),
+      h('span', { class: 'choice-body' }, h('span', { class: 'choice-title' }, title), desc && h('span', { class: 'choice-desc' }, desc)));
     b.addEventListener('click', () => { draw(v); onChange(v); });
     box.append(b);
   }

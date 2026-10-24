@@ -39,7 +39,7 @@ export function rank(items, query, { limit = 12, idle = 6 } = {}) {
 export const isPaletteOpen = () => !!current;
 export function closePalette() { current?.close(); }
 
-export function openPalette({ load, isAlive = () => true } = {}) {
+export function openPalette({ load, isAlive = () => true, placeholder = 'Search investments, pages and actions' } = {}) {
   if (current) { current.close(); return; } // the shortcut toggles
   const id = `pal-${++uid}`;
   const previous = document.activeElement;
@@ -47,7 +47,7 @@ export function openPalette({ load, isAlive = () => true } = {}) {
   let items = [], shown = [], active = 0, done = false, loaded = false, watch = 0;
 
   const input = h('input', { class: 'palette-input', type: 'text', role: 'combobox', 'aria-expanded': 'true', 'aria-controls': `${id}-list`, 'aria-autocomplete': 'list',
-    'aria-label': 'Search investments, pages and actions', placeholder: 'Search investments, pages and actions', autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'go' });
+    'aria-label': placeholder, placeholder, autocomplete: 'off', autocapitalize: 'off', spellcheck: 'false', enterkeyhint: 'go' });
   const list = h('ul', { class: 'palette-list', id: `${id}-list`, role: 'listbox', 'aria-label': 'Results' });
   const status = h('p', { class: 'sr-only', role: 'status' });
   const panel = h('div', { class: 'palette', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Search and commands' },

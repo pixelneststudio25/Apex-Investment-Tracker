@@ -12,11 +12,26 @@ import { InputError, bpToInput, koboToInput, optionalDate, parseNaira, parseShar
 import { COMPOUND_CHOICES, FREQUENCY_CHOICES, INCOME_CHOICES, RATE_BASED, SOURCE_CHOICES, STEP_TITLES, VALUE_CHOICES, applyTemplate, buildPlan, hasTerm, newDraft, savePlan, stepErrors, stepsFor } from '../models/wizard.js';
 
 const pctShort = (f) => pct(f).replace(/\.?0+%$/, '%');
+const LEDE = {
+  category: 'Pick the closest match. It only sets sensible starting answers, and you can change every one.',
+  basics: 'Give it a name and a start date.',
+  details: 'Everything here is optional. It helps you find the paperwork later.',
+  money: 'What you paid to get in. Later costs go in the ledger.',
+  value: 'Tell Apex how to work out what it is worth.',
+  income: 'Does it pay you anything along the way?',
+  people: 'List everyone in it, you included.',
+  review: 'Nothing is saved until you press Save.',
+};
+const ICONS = {
+  ownership: { sole: 'users', shared: 'handshake' },
+  value: { appreciation: 'arrowUp', depreciation: 'arrowDown', interest: 'landmark', manualOnly: 'sliders', none: 'check' },
+  income: { none: 'x', schedule: 'calendar', irregular: 'coins' },
+};
 const label = (choices, v) => (choices.find((c) => c[0] === v) || [v, v])[1];
 
 export function wizardView({ store, templates, partners, today, toast, go }) {
   const root = h('div', { class: 'wizard' });
-  let draft = newDraft(today), step = 'category', reg = {}, saving = false;
+  let draft = newDraft(today), step = 'category', reg = {}, saving = false, shown = null;
   const tplOf = () => templates.find((t) => t.id === draft.templateId) || null;
   const stepList = () => stepsFor(draft, tplOf());
   const dirty = () => !!(draft.templateId && (draft.name.trim() || draft.capital.amount.trim()));
@@ -28,16 +43,18 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
   function draw() {
     reg = {};
     const steps = stepList(), idx = steps.indexOf(step);
-    const title = h('h1', { class: 'page-title', tabindex: '-1' }, STEP_TITLES[step]);
+    const fresh = shown !== step; shown = step; // only a new screen slides in, not a redraw after a tap
+    const title = h('h1', { class: 'page-title wizard-title', tabindex: '-1' }, STEP_TITLES[step]);
     const body = ({ category, basics, details, money: moneyStep, value: valueStep, income: incomeStep, people: peopleStep, review })[step]();
     // One form, so pressing Enter in a field means Continue (or Save on the last screen).
     root.replaceChildren(h('form', { class: 'flow wizard-form', novalidate: true, onsubmit: (e) => { e.preventDefault(); if (step === 'review') save(); else if (step !== 'category') next(); } },
       h('div', { class: 'wizard-top' },
-        h('button', { class: 'back back--btn', type: 'button', onclick: cancel }, icon('chevronLeft', { size: 18 }), 'Cancel'),
-        h('p', { class: 'sub' }, `Step ${idx + 1} of ${steps.length}`)),
+        h('button', { class: 'back back--btn', type: 'button', onclick: cancel }, icon('x', { size: 18 }), 'Cancel'),
+        h('p', { class: 'wizard-count' }, h('strong', {}, idx + 1), ` of ${steps.length}`)),
       h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '1', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(idx + 1), 'aria-label': 'Progress' },
         steps.map((s, i) => h('span', { class: i <= idx ? 'on' : '' }))),
-      title, body, footer(steps, idx)));
+      h('div', { class: `wizard-head${fresh ? ' step-in' : ''}` }, title, step !== 'category' && h('p', { class: 'wizard-lede' }, LEDE[step])),
+      h('div', { class: `wizard-body${fresh ? ' step-in' : ''}` }, body), footer(steps, idx)));
     title.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
@@ -50,8 +67,8 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     if (step === 'category') return h('div', {});
     const last = step === 'review';
     return h('div', { class: 'row wizard-foot sticky-actions' },
-      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { step = steps[idx - 1]; draw(); } }, 'Back'),
-      last ? h('button', { class: 'btn', type: 'submit', id: 'save-btn' }, 'Save investment') : h('button', { class: 'btn', type: 'submit' }, 'Continue'));
+      h('button', { class: 'btn btn--secondary btn--back', type: 'button', onclick: () => { step = steps[idx - 1]; draw(); } }, 'Back'),
+      last ? h('button', { class: 'btn btn--grow', type: 'submit', id: 'save-btn' }, 'Save investment') : h('button', { class: 'btn btn--grow', type: 'submit' }, 'Continue'));
   }
   function next() {
     const steps = stepList(), errs = stepErrors(draft, step, tplOf(), { today });
@@ -66,7 +83,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
   // ---------- 1. category ----------
   function category() {
     return h('div', { class: 'stack' },
-      h('p', { class: 'sub' }, 'Pick the closest match. It only sets sensible starting answers, and you can change every one of them.'),
+      h('p', { class: 'wizard-lede' }, LEDE.category),
       h('div', { class: 'cat-grid' }, templates.map((t) => h('button', { class: 'cat', type: 'button', 'aria-pressed': String(t.id === draft.templateId),
         onclick: () => { if (t.id !== draft.templateId) draft = applyTemplate(draft, t, today); step = 'basics'; draw(); } },
       h('span', { class: 'tile' }, icon(t.icon)), h('span', { class: 'cat-name' }, t.name)))));
@@ -80,14 +97,14 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
       F('openedOn', 'Start date', dateInput({ value: draft.openedOn, onInput: (v) => { draft.openedOn = v; } }), { hint: 'The day you bought it or first put money in.' }),
       hasTerm(tpl) && F('maturityDate', 'Maturity date', dateInput({ value: draft.maturityDate, onInput: (v) => { draft.maturityDate = v; } }), { hint: 'The day it is due to pay out.' }),
       h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'Who owns it?'),
-        choiceList({ name: 'ownership', label: 'Who owns it', value: draft.ownership, onChange: (v) => { draft.ownership = v; draw(); },
+        choiceList({ name: 'ownership', label: 'Who owns it', icons: ICONS.ownership, value: draft.ownership, onChange: (v) => { draft.ownership = v; draw(); },
           options: [['sole', 'Just me'], ['shared', 'Shared with other people', 'Apex will ask who is in it and how much each person put in.']] })),
       F('notes', 'Notes', textArea({ value: draft.notes, onInput: (v) => { draft.notes = v; }, maxlength: 5000 }), { optional: true }));
   }
 
   // ---------- 3. details ----------
   function details() {
-    return h('div', { class: 'stack' }, h('p', { class: 'sub' }, `Everything here is optional. It helps you find the paperwork later.`),
+    return h('div', { class: 'stack' },
       ...(tplOf().customFieldDefs || []).map((d) => F(d.key, d.label, textInput({ value: draft.fields[d.key] ?? '', onInput: (v) => { draft.fields[d.key] = v; },
         type: d.type === 'date' ? 'date' : 'text', inputmode: d.type === 'number' ? 'decimal' : undefined, maxlength: 500 }), { optional: true })));
   }
@@ -103,7 +120,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
   // ---------- 5. value ----------
   function valueStep() {
     const r = draft.rate, based = RATE_BASED.includes(draft.valueChange), out = h('div', { class: 'stack' });
-    out.append(choiceList({ name: 'value', label: 'How its value changes', value: draft.valueChange, options: VALUE_CHOICES,
+    out.append(choiceList({ name: 'value', label: 'How its value changes', icons: ICONS.value, value: draft.valueChange, options: VALUE_CHOICES,
       onChange: (v) => { draft.valueChange = v; if (v === 'interest') r.type = 'agreed'; else if (r.type === 'agreed') r.type = 'assumed'; draw(); } }));
     if (based) {
       const verb = draft.valueChange === 'depreciation' ? 'How much it loses' : draft.valueChange === 'interest' ? 'Interest rate' : 'How much it grows';
@@ -132,7 +149,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
   // ---------- 6. income ----------
   function incomeStep() {
     const s = draft.schedule, out = h('div', { class: 'stack' });
-    out.append(choiceList({ name: 'income', label: 'Income it pays', value: draft.income, options: INCOME_CHOICES, onChange: (v) => { draft.income = v; draw(); } }));
+    out.append(choiceList({ name: 'income', label: 'Income it pays', icons: ICONS.income, value: draft.income, options: INCOME_CHOICES, onChange: (v) => { draft.income = v; draw(); } }));
     if (draft.income === 'irregular') out.append(h('p', { class: 'note-box' }, 'You will add each payout or payment from the Ledger tab when it arrives.'));
     if (draft.income !== 'schedule') return out;
     const past = h('div', {});
@@ -198,7 +215,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
       } catch (e) { if (e instanceof InputError) toast(e.message); else throw e; }
     };
     return h('div', { class: 'stack' },
-      h('p', { class: 'sub' }, 'List everyone in it, you included. Each share is a percentage of the whole, and what each person put in must add up to the total you entered.'),
+      h('p', { class: 'sub' }, 'Each share is a percentage of the whole, and what each person put in must add up to the total you entered.'),
       general, rowsBox, totals,
       h('div', { class: 'row' },
         h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { rows.push({ ref: '', name: '', share: '', putIn: '' }); drawRows(); } }, 'Add another person'),
@@ -219,7 +236,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     const valueText = !rate ? label(VALUE_CHOICES, inv.behaviors.valueChange)
       : `${rate.type === 'agreed' ? 'Agreed' : 'Assumed'} ${inv.behaviors.valueChange === 'depreciation' ? 'loss' : inv.behaviors.valueChange === 'interest' ? 'interest' : 'growth'} of ${pctShort(Math.abs(rate.rate))} ${rate.rateUnit === 'month' ? 'a month' : 'a year'}, ${rate.method === 'compound' ? `compounding ${label(COMPOUND_CHOICES, String(rate.compoundsPerYear)).toLowerCase()}` : 'simple'}`;
     const sched = plan.schedule;
-    const out = h('div', { class: 'stack' }, h('p', { class: 'sub' }, 'Nothing is saved until you press Save. This is exactly what Apex will record.'),
+    const out = h('div', { class: 'stack' },
       section('The investment', 'basics', [['Category', tpl.name], ['Name', inv.name], ['Started', fmtDate(inv.openedOn)], inv.behaviors.term && ['Matures', fmtDate(inv.behaviors.term.maturityDate)], ['Owned', inv.behaviors.ownership === 'shared' ? 'Shared' : 'Just you'], inv.notes && ['Notes', inv.notes]]),
       Object.keys(inv.customFields).length > 0 && section('Details', 'details', (tpl.customFieldDefs || []).filter((d) => inv.customFields[d.key] != null).map((d) => [d.label, String(inv.customFields[d.key])])),
       section('Money put in', 'money', [['Amount', money(plan.entries[0].amountKobo, { compact: false })], ['Date', fmtDate(plan.entries[0].date)], plan.entries[0].note && ['Note', plan.entries[0].note]]),

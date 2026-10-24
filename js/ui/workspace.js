@@ -6,7 +6,7 @@ import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, s
 import { slideThumb } from './formkit.js';
 import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
-import { donut, ghostChart, lineChart, segmentClass } from './charts.js';
+import { donut, lineChart, segmentClass } from './charts.js';
 import { amtText, fmtDate, fmtMonthYear, greeting, isHidden, money, pct, setHidden, todayISO, tone } from './fmt.js';
 import { addMonths } from '../engine/index.js';
 import { createPortfolio } from '../models/portfolio.js';
@@ -215,6 +215,34 @@ export function mountWorkspace({ data, email, actions }) {
     text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
     actions: [addLink(), sampleButton(ctx)] });
 
+  // ---------- Home: quick actions and the investment cards ----------
+  const activeOf = (items) => items.filter((it) => !it.error && it.metrics.basis !== 'realized');
+  function quickActions(ctx, items) {
+    const live = activeOf(items);
+    const pick = (kind, placeholder) => () => {
+      if (live.length === 1) { go(`#/investments/${live[0].investment.id}/${kind}`); return; }
+      openPalette({ placeholder, isAlive: () => root.isConnected, load: async () => live.map(({ investment: inv }) => { const c = ctx.cat(inv.categoryId); return { group: 'Choose an investment', label: inv.name, sub: c.name, icon: c.icon, run: () => go(`#/investments/${inv.id}/${kind}`) }; }) });
+    };
+    const qa = (ic, text, props) => h(props.href ? 'a' : 'button', { class: 'qa', ...(props.href ? {} : { type: 'button' }), ...props }, h('span', { class: 'qa-ico' }, icon(ic, { size: 22 })), h('span', { class: 'qa-label' }, text));
+    return h('div', { class: 'qa-row', role: 'group', 'aria-label': 'Quick actions' },
+      qa('plus', 'Add', { href: '#/new', 'aria-label': 'Add an investment' }),
+      live.length > 0 && qa('coins', 'Entry', { onclick: pick('entry', 'Add an entry to which investment?'), 'aria-label': 'Add a ledger entry' }),
+      live.length > 0 && qa('chart', 'Value', { onclick: pick('valuation', 'Add a valuation to which investment?'), 'aria-label': 'Add a valuation' }),
+      qa('search', 'Search', { onclick: () => showPalette(), 'aria-label': 'Search and commands' }));
+  }
+  function investmentStrip(ctx, items) {
+    const rank = (it) => [it.metrics.basis === 'realized' ? 1 : 0, -Number(it.metrics.currentValueKobo)];
+    const shown = items.filter((it) => !it.error).sort((a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1]; }).slice(0, 8);
+    if (!shown.length) return null;
+    return h('section', { 'aria-label': 'Your investments' }, sectionHead('Your investments', h('a', { class: 'see-all', href: '#/investments' }, 'See all')),
+      h('ul', { class: 'cards' }, shown.map(({ investment: inv, metrics: m }) => { const c = ctx.cat(inv.categoryId);
+        return h('li', {}, h('a', { class: 'inv-card', href: `#/investments/${inv.id}` },
+          h('span', { class: `tile ${tintOf(inv.categoryId)}` }, icon(c.icon)),
+          h('span', { class: 'inv-card-name' }, inv.name), h('span', { class: 'inv-card-sub' }, m.basis === 'realized' ? `${c.name}, closed` : c.name),
+          h('span', { class: 'inv-card-val money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi)));
+      })));
+  }
+
   // ---------- setup checklist (Home) ----------
   // Every tick comes from what is actually on this device, never from a click, so it cannot say "done" falsely.
   // The sample portfolio does not count: it is made up. "Hide" is remembered on this device.
@@ -237,21 +265,26 @@ export function mountWorkspace({ data, email, actions }) {
     const bar = h('div', { class: 'setup-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(done), 'aria-label': 'Setup progress' }, h('i', {}));
     bar.style.setProperty('--p', String(done / steps.length));
     const hide = h('button', { class: 'link-btn', type: 'button', onclick: async () => { await ctx.store.meta.set('setupDismissed', true); render(); } }, all ? 'Done' : 'Hide');
-    return h('section', { class: 'panel setup', 'aria-label': 'Getting started' },
-      h('div', { class: 'section-head setup-head' }, h('div', {}, h('h2', {}, all ? 'You are all set.' : 'Getting started'), h('p', { class: 'sub' }, all ? 'Everything on the list is done.' : `${done} of ${steps.length} done`)), hide),
-      bar,
-      h('ul', { class: 'setup-steps' }, steps.map((x) => h('li', { class: `setup-step${x.done ? ' is-done' : ''}` },
-        h('span', { class: 'setup-check', 'aria-hidden': 'true' }, x.done && icon('check', { size: 16 })),
-        h('div', { class: 'setup-text' }, h('p', { class: 'setup-title' }, x.title, x.done && h('span', { class: 'sr-only' }, ' (done)')), !x.done && h('p', { class: 'sub' }, x.text)),
-        !x.done && x.act))));
+    const list = h('ul', { class: 'setup-steps' }, steps.map((x) => h('li', { class: `setup-step${x.done ? ' is-done' : ''}` },
+      h('span', { class: 'setup-check', 'aria-hidden': 'true' }, x.done && icon('check', { size: 16 })),
+      h('div', { class: 'setup-text' }, h('p', { class: 'setup-title' }, x.title, x.done && h('span', { class: 'sr-only' }, ' (done)')), !x.done && h('p', { class: 'sub' }, x.text)),
+      !x.done && x.act)));
+    const more = h('div', { class: 'setup-more', id: 'setup-more', hidden: true }, bar, list, h('div', { class: 'setup-foot' }, hide));
+    const ring = h('span', { class: 'setup-ring', 'aria-hidden': 'true' }, h('span', {}, `${done}/${steps.length}`));
+    ring.style.setProperty('--p', String(done / steps.length));
+    const toggle = h('button', { class: 'setup-toggle', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'setup-more',
+      onclick: () => { const open = more.hidden; more.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); } },
+      ring, h('span', { class: 'setup-toggle-text' }, h('strong', {}, all ? 'You are all set' : 'Getting started'), h('span', { class: 'sub' }, all ? 'Everything on the list is done.' : `Next: ${steps.find((x) => !x.done).title}`)), icon('chevronRight', { size: 18 }));
+    return h('section', { class: 'panel setup', 'aria-label': 'Getting started' }, toggle, more);
   }
 
   // ---------- Home ----------
   async function homeView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
-    const heading = h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`),
-      settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName)), items.length ? addLink() : null);
+    const firstName = (settings.displayName || '').trim().split(/\s+/)[0];
+    const heading = h('div', { class: 'home-head' }, h('div', {}, h('p', { class: 'home-greet' }, greeting()), h('h1', { class: 'page-title' }, firstName || 'Welcome')),
+      settings.portfolioName && h('span', { class: 'chip chip--plain' }, settings.portfolioName));
     const setup = await setupCard(ctx, items);
     if (!items.length) return h('div', { class: 'flow' }, heading, firstRun(ctx, 'home'), rise(setup, 1));
     const [sum, tl, up, rec, sample] = await Promise.all([ctx.pf.summary(asOf, items), ctx.pf.timeline(asOf), ctx.pf.upcoming(asOf), ctx.pf.recent(6), sampleLive(ctx.store)]);
@@ -264,8 +297,7 @@ export function mountWorkspace({ data, email, actions }) {
     // growth chart: lives inside the statement card, under the big number
     const growth = (() => {
       if (tl.length < 2) {
-        return h('div', { class: 'growth growth--ghost' }, ghostChart(),
-          h('p', { class: 'sub growth-note' }, 'Your growth chart draws itself as your investments build up history. It starts after your first month-end.'));
+        return h('p', { class: 'sub growth-note growth-note--plain' }, 'Your growth chart appears after your first month-end.');
       }
       const range = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Chart range' });
       const readout = h('p', { class: 'readout', 'aria-live': 'off' });
@@ -301,6 +333,7 @@ export function mountWorkspace({ data, email, actions }) {
     const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
       h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
       h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
+      quickActions(ctx, items),
       growth,
       h('dl', { class: 'statement-line' },
         stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
@@ -342,7 +375,7 @@ export function mountWorkspace({ data, email, actions }) {
 
     const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes, rise(setup, 0),
       h('div', { class: 'dash' },
-        h('div', { class: 'dash-main' }, rise(statement, 0)),
+        h('div', { class: 'dash-main' }, rise(statement, 0), rise(investmentStrip(ctx, items), 1)),
         h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 2)),
         h('div', { class: 'dash-wide' }, rise(recentPanel, 3))));
     return out;
