@@ -1,0 +1,64 @@
+/* Motion and loading: loaders, skeletons, page and list entrances, splash, view transitions.
+   Everything animates transform and opacity only. Durations and easings come from tokens.css. */
+
+/* ---- Spinner and busy buttons (see setBusy in js/ui/motion.js) ---- */
+.spinner {
+  display: inline-block; flex: none; width: 1.125em; height: 1.125em; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, currentColor 22%, transparent); border-top-color: currentColor;
+  animation: spin 0.8s linear infinite;
+}
+.spinner--lg { font-size: 2rem; color: var(--accent); }
+.btn .btn-label { display: inline-flex; align-items: center; gap: var(--space-2); transition: opacity var(--dur-fast) var(--ease-out); }
+.btn .spinner { position: absolute; left: 50%; top: 50%; margin: -0.5625em 0 0 -0.5625em; opacity: 0; transition: opacity var(--dur-fast) var(--ease-out); }
+.btn.is-busy, .btn.is-busy[disabled] { opacity: 1; cursor: progress; }
+.btn.is-busy .btn-label { opacity: 0; }
+.btn.is-busy .spinner { opacity: 1; }
+.page-loader { display: grid; place-items: center; min-height: 40vh; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Skeletons: shimmer in the shape of the content ---- */
+.skeleton { position: relative; overflow: hidden; background: var(--surface-2); border-radius: var(--radius-sm); color: transparent; -webkit-user-select: none; user-select: none; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, var(--shimmer), transparent); animation: shimmer 1.4s var(--ease-in-out) infinite; }
+.skeleton-line { height: 0.9em; margin: 0.45em 0; }
+.skeleton-hero { height: 3.2rem; width: min(70%, 18rem); border-radius: var(--radius-input); }
+.skeleton-tile { width: 40px; height: 40px; border-radius: 10px; flex: none; }
+.skeleton-block { height: 12rem; border-radius: var(--radius-card); }
+@keyframes shimmer { to { transform: translateX(100%); } }
+
+/* ---- Entrances ---- */
+.page-enter { animation: rise var(--dur-base) var(--ease-out) both; }
+.stagger > * { animation: rise var(--dur-base) var(--ease-out) both; animation-delay: calc(var(--i, 0) * 40ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fade-in { animation: fade var(--dur-base) var(--ease-out) both; }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* The toast already centres itself with translateX(-50%); keep that while it slides up. */
+.toast { animation: toast-in var(--dur-base) var(--ease-out) both; }
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
+/* ---- Splash: shown while the app boots (js/boot.js adds html.is-booting) ---- */
+.splash { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; background: var(--bg); }
+html.is-booting .splash { display: flex; }
+html.is-booting.boot-done .splash { animation: splash-out var(--dur-slow) var(--ease-out) forwards; pointer-events: none; }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+.splash-mark { width: 88px; height: 88px; border-radius: 22%; box-shadow: 0 0 0 1px light-dark(transparent, rgba(255, 255, 255, 0.12)); animation: tile-in var(--dur-slow) var(--ease-out) both; }
+.splash-line { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; animation: draw 0.75s var(--ease-out) 0.2s forwards; }
+.splash-dot { transform-box: fill-box; transform-origin: center; transform: scale(0); animation: pop 0.42s var(--ease-spring) 0.8s forwards; }
+@keyframes tile-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: none; } }
+@keyframes draw { from { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
+@keyframes pop { to { transform: scale(1); } }
+
+/* ---- View transitions (page changes and the theme switch) ---- */
+html[data-vt="page"]::view-transition-old(root) { animation: fade-out 120ms var(--ease-out) both; }
+html[data-vt="page"]::view-transition-new(root) { animation: rise var(--dur-base) var(--ease-out) both; }
+@keyframes fade-out { to { opacity: 0; } }
+html[data-vt="theme"]::view-transition-old(root), html[data-vt="theme"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html[data-vt="theme"]::view-transition-old(root) { z-index: 1; }
+html[data-vt="theme"]::view-transition-new(root) { z-index: 2; }
+
+/* ---- Reduced motion: no movement, spinner still turns (slowly) so people know work is happening ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .spinner { animation-duration: 1.6s !important; animation-iteration-count: infinite !important; }
+  .skeleton::after { display: none; }
+}

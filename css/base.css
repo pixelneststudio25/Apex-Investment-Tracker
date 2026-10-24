@@ -1,0 +1,73 @@
+/* Base elements, page shell, buttons, brand lockup, theme toggle icon. Tokens come from tokens.css. */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; scrollbar-color: var(--border-strong) transparent; }
+[hidden] { display: none !important; }
+
+body {
+  margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--bg); color: var(--text);
+  font: 400 var(--fs-body)/1.5 var(--font-sans);
+  font-optical-sizing: auto; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  overscroll-behavior-y: none; isolation: isolate;
+}
+/* Paper grain: only on the light theme (transparent on dark), only where the page background shows. */
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: light-dark(rgba(20, 24, 27, 0.9), transparent); opacity: 0.045;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 160px 160px repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E") 0 0 / 160px 160px repeat;
+}
+::selection { background: color-mix(in srgb, var(--accent) 28%, transparent); }
+
+h1, h2 { font-family: var(--font-serif); font-weight: 500; margin: 0; text-wrap: balance; letter-spacing: -0.012em; }
+h1 { font-size: var(--fs-h1); line-height: 1.15; }
+h2 { font-size: var(--fs-h2); line-height: 1.25; }
+.shell { max-width: 40rem; margin: 0 auto; padding: var(--space-6) var(--space-4); }
+.num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.muted { color: var(--text-muted); }
+.hero-value { font: 500 var(--fs-display)/var(--lh-display) var(--font-serif); letter-spacing: -0.02em; margin: 0; }
+.gain { color: var(--positive); }
+.loss { color: var(--negative); }
+.gold-rule { border: 0; height: 2px; border-radius: 2px; background: var(--accent); margin: var(--space-3) 0 var(--space-6); width: 3rem; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-card); padding: var(--space-6); margin-bottom: var(--space-6);
+  box-shadow: var(--card-highlight), var(--shadow-1);
+}
+
+/* ---- Buttons: ink primary, quiet secondary ---- */
+.btn {
+  position: relative; display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+  min-height: 48px; padding: 0 var(--space-6); border-radius: var(--radius-input);
+  font: 600 var(--fs-body)/1 var(--font-sans); letter-spacing: -0.005em; cursor: pointer;
+  border: 1px solid var(--btn-bg); background: var(--btn-bg); color: var(--btn-fg);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring), box-shadow var(--dur-fast) var(--ease-out);
+  -webkit-user-select: none; user-select: none; touch-action: manipulation;
+}
+@media (hover: hover) { .btn:hover { background: var(--btn-bg-hover); border-color: var(--btn-bg-hover); } }
+.btn:active { transform: scale(0.97); transition-duration: var(--dur-instant); }
+.btn:focus-visible { outline-offset: 3px; }
+.btn--secondary { background: transparent; color: var(--text); border-color: var(--border-strong); }
+@media (hover: hover) { .btn--secondary:hover { background: var(--surface-2); border-color: var(--border-strong); } }
+
+/* ---- Brand lockup (header on sign-in screens; the workspace has its own in Phase 3) ---- */
+.lockup { display: inline-flex; align-items: center; gap: 0.7rem; color: var(--text); }
+.lockup-mark { width: 2rem; height: 2rem; display: block; border-radius: 22%; box-shadow: 0 0 0 1px light-dark(transparent, rgba(255, 255, 255, 0.12)); }
+/* The wordmark is a mask, so it takes the text colour of whichever theme is active. */
+.wordmark {
+  --wm-h: 1.7rem; position: relative; top: calc(var(--wm-h) * 0.13); display: inline-block; flex: none;
+  height: var(--wm-h); width: calc(var(--wm-h) * 2.4473); background-color: currentColor;
+  -webkit-mask: url("/img/apex-wordmark.png") center / contain no-repeat; mask: url("/img/apex-wordmark.png") center / contain no-repeat;
+}
+
+/* ---- Theme toggle icon: moon in light, sun in dark ---- */
+.theme-toggle svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.theme-ico--sun { display: none; }
+:root[data-theme="dark"] .theme-ico--sun { display: block; }
+:root[data-theme="dark"] .theme-ico--moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-ico--sun { display: block; }
+  :root:not([data-theme="light"]) .theme-ico--moon { display: none; }
+}

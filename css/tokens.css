@@ -1,0 +1,137 @@
+/* Apex design tokens.
+   Light is "Paper Ledger" (ivory paper, ink text). Dark is "Ink Ledger" (green-black, ivory text).
+   Theme selection: follows the device unless <html data-theme="light|dark"> is set (Settings and the toggle do that).
+   Every colour is declared ONCE with light-dark(). Browsers without light-dark() get the plain light values,
+   plus a dark fallback block at the bottom of the colour section. */
+
+:root {
+  color-scheme: light;
+
+  /* ---- Colour (plain light values = fallback; light-dark() overrides below) ---- */
+  --bg: #F7F4EC; --surface: #FCFAF5; --surface-2: #F0ECE1;
+  --border: #E3DDCE; --border-strong: #CFC8B5;
+  --text: #14181B; --text-muted: #5E655F;
+  --accent: #0F5C45; --accent-strong: #0B4A37; --accent-soft: #E1EDE6; --on-accent: #F7F4EC;
+  --btn-bg: #14181B; --btn-bg-hover: #2A3034; --btn-fg: #F7F4EC;
+  --positive: #1E7F3C; --negative: #B83A26; --info: #2F5FA8; --warn: #9A6200;
+  --focus-ring: #0F5C45;
+  --shimmer: rgba(255, 255, 255, 0.65); --overlay: rgba(20, 24, 27, 0.45);
+
+  /* Legacy names still used by css not yet redesigned. Remove once every phase has shipped. */
+  --gold: var(--accent); --gold-bright: var(--accent); --on-gold: var(--on-accent);
+
+  /* ---- Type ---- */
+  --font-serif: "Newsreader", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-sans: "Apex Naira", "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, Menlo, Consolas, monospace;
+  --text-scale: 1; /* Settings: 0.9, 1, 1.15, 1.3 */
+  --fs-display: calc(2.75rem * var(--text-scale));
+  --lh-display: calc(3rem * var(--text-scale));
+  --fs-h1: calc(2rem * var(--text-scale));
+  --fs-h2: calc(1.5rem * var(--text-scale));
+  --fs-h3: calc(1.125rem * var(--text-scale));
+  --fs-body: calc(1rem * var(--text-scale));
+  --fs-small: calc(0.875rem * var(--text-scale));
+  --fs-caption: calc(0.75rem * var(--text-scale));
+  --fs-numeric: calc(0.9375rem * var(--text-scale));
+
+  /* ---- Space (4px base) ---- */
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
+  --space-6: 1.5rem; --space-8: 2rem; --space-12: 3rem; --space-16: 4rem;
+
+  /* ---- Shape ---- */
+  --radius-sm: 8px; --radius-input: 10px; --radius-card: 18px; --radius-lg: 22px; --radius-sheet: 28px; --radius-pill: 999px;
+
+  /* ---- Motion ---- */
+  --dur-instant: 90ms; --dur-fast: 150ms; --dur-base: 260ms; --dur-slow: 420ms; --dur-hero: 900ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.45, 0.64, 1);
+
+  /* ---- Layout ---- */
+  --sidebar-w: 248px; --content-max: 1200px; --tap-min: 44px;
+
+  /* ---- Elevation (never "none" inside a list, so box-shadow lists stay valid) ---- */
+  --shadow-1: 0 1px 2px rgba(20, 24, 27, 0.06), 0 1px 1px rgba(20, 24, 27, 0.03);
+  --shadow-2: 0 8px 24px rgba(20, 24, 27, 0.09), 0 2px 6px rgba(20, 24, 27, 0.04);
+  --shadow-3: 0 18px 48px rgba(20, 24, 27, 0.16);
+  --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+@media (min-width: 1024px) {
+  :root { --fs-display: calc(3.75rem * var(--text-scale)); --lh-display: calc(4rem * var(--text-scale)); }
+}
+
+/* ---- Which scheme is active ---- */
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; } }
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ---- The single palette: light-dark(light, dark) ---- */
+@supports (color: light-dark(#000, #fff)) {
+  :root {
+    --bg: light-dark(#F7F4EC, #0B0F0D);
+    --surface: light-dark(#FCFAF5, #121815);
+    --surface-2: light-dark(#F0ECE1, #19211D);
+    --border: light-dark(#E3DDCE, #26302B);
+    --border-strong: light-dark(#CFC8B5, #34413A);
+    --text: light-dark(#14181B, #F3F0E7);
+    --text-muted: light-dark(#5E655F, #A0A99F);
+    --accent: light-dark(#0F5C45, #58B8A0);
+    --accent-strong: light-dark(#0B4A37, #7FD0B9);
+    --accent-soft: light-dark(#E1EDE6, rgba(88, 184, 160, 0.14));
+    --on-accent: light-dark(#F7F4EC, #0B0F0D);
+    --btn-bg: light-dark(#14181B, #F3F0E7);
+    --btn-bg-hover: light-dark(#2A3034, #FFFFFF);
+    --btn-fg: light-dark(#F7F4EC, #0B0F0D);
+    --positive: light-dark(#1E7F3C, #7BC96F);
+    --negative: light-dark(#B83A26, #F0806B);
+    --info: light-dark(#2F5FA8, #7DA7E8);
+    --warn: light-dark(#9A6200, #E0A93B);
+    --focus-ring: light-dark(#0F5C45, #7FD0B9);
+    --shimmer: light-dark(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.07));
+    --overlay: light-dark(rgba(20, 24, 27, 0.45), rgba(0, 0, 0, 0.6));
+    --shadow-1: 0 1px 2px light-dark(rgba(20, 24, 27, 0.06), transparent), 0 1px 1px light-dark(rgba(20, 24, 27, 0.03), transparent);
+    --shadow-2: 0 8px 24px light-dark(rgba(20, 24, 27, 0.09), rgba(0, 0, 0, 0.45)), 0 2px 6px light-dark(rgba(20, 24, 27, 0.04), transparent);
+    --shadow-3: 0 18px 48px light-dark(rgba(20, 24, 27, 0.16), rgba(0, 0, 0, 0.6));
+    --card-highlight: inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.04));
+  }
+}
+
+/* ---- Fallback for browsers without light-dark(): dark palette, declared twice (device + manual). Keep identical. ---- */
+@supports not (color: light-dark(#000, #fff)) {
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0B0F0D; --surface: #121815; --surface-2: #19211D; --border: #26302B; --border-strong: #34413A;
+      --text: #F3F0E7; --text-muted: #A0A99F; --accent: #58B8A0; --accent-strong: #7FD0B9; --accent-soft: rgba(88, 184, 160, 0.14); --on-accent: #0B0F0D;
+      --btn-bg: #F3F0E7; --btn-bg-hover: #FFFFFF; --btn-fg: #0B0F0D;
+      --positive: #7BC96F; --negative: #F0806B; --info: #7DA7E8; --warn: #E0A93B; --focus-ring: #7FD0B9;
+      --shimmer: rgba(255, 255, 255, 0.07); --overlay: rgba(0, 0, 0, 0.6);
+      --shadow-1: 0 0 0 0 transparent; --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45); --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
+      --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B0F0D; --surface: #121815; --surface-2: #19211D; --border: #26302B; --border-strong: #34413A;
+    --text: #F3F0E7; --text-muted: #A0A99F; --accent: #58B8A0; --accent-strong: #7FD0B9; --accent-soft: rgba(88, 184, 160, 0.14); --on-accent: #0B0F0D;
+    --btn-bg: #F3F0E7; --btn-bg-hover: #FFFFFF; --btn-fg: #0B0F0D;
+    --positive: #7BC96F; --negative: #F0806B; --info: #7DA7E8; --warn: #E0A93B; --focus-ring: #7FD0B9;
+    --shimmer: rgba(255, 255, 255, 0.07); --overlay: rgba(0, 0, 0, 0.6);
+    --shadow-1: 0 0 0 0 transparent; --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45); --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
+    --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+
+/* ---- TEMPORARY: chart colours. workspace.css still declares the old gold palette (three times).
+   This higher-specificity block wins until workspace.css is replaced in Phase 3, then it moves there. ---- */
+:root:root:root { --chart-1: #0F5C45; --chart-2: #3C6FB5; --chart-3: #B9892B; --chart-4: #8A5FA8; --chart-5: #C4623D; --chart-6: #6B7A74; }
+@supports (color: light-dark(#000, #fff)) {
+  :root:root:root {
+    --chart-1: light-dark(#0F5C45, #58B8A0); --chart-2: light-dark(#3C6FB5, #7DA7E8); --chart-3: light-dark(#B9892B, #E0B65A);
+    --chart-4: light-dark(#8A5FA8, #B58CE0); --chart-5: light-dark(#C4623D, #E39B6A); --chart-6: light-dark(#6B7A74, #8FA0A0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-instant: 0ms; --dur-fast: 0ms; --dur-base: 0ms; --dur-slow: 0ms; --dur-hero: 0ms; }
+}
