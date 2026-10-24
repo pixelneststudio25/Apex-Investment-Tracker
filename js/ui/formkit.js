@@ -22,7 +22,9 @@ export function field(label, makeControl, { hint, optional = false, className = 
     setError(msg) {
       err.textContent = msg || '';
       if (msg) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
-      el.classList.toggle('has-error', !!msg);
+      // Taking the class off and putting it back restarts the little shake each time the person tries again.
+      el.classList.remove('has-error');
+      if (msg) { void el.offsetWidth; el.classList.add('has-error'); }
     },
   };
 }
@@ -83,6 +85,16 @@ export function choiceList({ name, options, value, onChange, label }) {
     box.append(b);
   }
   draw(value);
+  // Arrow keys move between the options (only the chosen one is in the Tab order); Space or Enter chooses.
+  box.addEventListener('keydown', (e) => {
+    const step = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+    if (!step) return;
+    const items = [...box.children], at = items.indexOf(document.activeElement);
+    if (at < 0) return;
+    e.preventDefault();
+    const to = items[(at + step + items.length) % items.length];
+    to.tabIndex = 0; to.focus();
+  });
   return box;
 }
 

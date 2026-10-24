@@ -4,6 +4,7 @@
 import { h } from './dom.js';
 import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
 import { slideThumb } from './formkit.js';
+import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { donut, ghostChart, lineChart, segmentClass } from './charts.js';
 import { amtText, fmtDate, fmtMonthYear, greeting, isHidden, money, pct, setHidden, todayISO, tone } from './fmt.js';
@@ -191,7 +192,7 @@ export function mountWorkspace({ data, email, actions }) {
     render();
   }
   async function deleteInvestment(ctx, inv) {
-    if (!window.confirm(`Delete "${inv.name}"? It and everything recorded under it will be hidden. You can undo right after.`)) return;
+    if (!(await confirmDialog({ title: `Delete \"${inv.name}\"?`, body: 'It and everything recorded under it will be hidden. You can undo right after.', confirmLabel: 'Delete', cancelLabel: 'Keep it', danger: true }))) return;
     await ctx.store.remove(inv.id);
     toast(`"${inv.name}" deleted.`, { label: 'Undo', run: async () => { await ctx.store.restore(inv.id); render(); } });
     go('#/investments');
@@ -513,6 +514,8 @@ export function mountWorkspace({ data, email, actions }) {
     const page = parts[0] || 'home';
     const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home';
     paintChrome(key);
+    // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
+    root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3));
     outlet.setAttribute('aria-busy', 'true');
     // The skeleton only appears if loading takes a moment, so quick pages do not flash.
     const wait = setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);

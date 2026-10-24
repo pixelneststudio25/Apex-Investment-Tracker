@@ -47,7 +47,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
     } catch (err) { showError('Could not delete. Nothing was changed.'); console.error(err); }
   } }, `Delete this ${what.toLowerCase()}`);
   const head = (title, sub) => h('div', {}, h('h1', { class: 'page-title' }, title), h('p', { class: 'sub' }, sub || inv.name));
-  const actions = (primary, extra) => h('div', { class: 'row' }, submit(primary), h('a', { class: 'btn btn--secondary', href: back }, 'Cancel'), extra);
+  const actions = (primary, extra) => h('div', { class: 'row sticky-actions' }, submit(primary), h('a', { class: 'btn btn--secondary', href: back }, 'Cancel'), extra);
 
   // ---------- ledger entry ----------
   if (kind === 'entry') {
@@ -64,7 +64,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       const data = buildEntry(form, invId);
       if (editing) { const { investmentId, ...change } = data; await store.update(recordId, change); } else await store.create('entry', data);
     }, editing ? 'Entry updated.' : 'Entry added.');
-    return h('div', { class: 'flow' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && removeWithUndo(recordId, 'Entry'));
+    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && removeWithUndo(recordId, 'Entry'));
   }
 
   // ---------- valuation ----------
@@ -81,12 +81,12 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       const data = buildValuation(form, invId);
       if (editing) { const { investmentId, ...change } = data; await store.update(recordId, change); } else await store.create('valuation', data);
     }, editing ? 'Valuation updated.' : 'Valuation added.');
-    return h('div', { class: 'flow' }, backLink, head(editing ? 'Edit valuation' : 'Add a valuation'), f, editing && removeWithUndo(recordId, 'Valuation'));
+    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit valuation' : 'Add a valuation'), f, editing && removeWithUndo(recordId, 'Valuation'));
   }
 
   // ---------- close ----------
   if (kind === 'close') {
-    if (closed) return h('div', { class: 'flow' }, backLink, head('Already closed', inv.name), h('p', { class: 'note-box' }, `This investment was closed on ${fmtDate(inv.closedOn)}.`));
+    if (closed) return h('div', { class: 'flow form-page' }, backLink, head('Already closed', inv.name), h('p', { class: 'note-box' }, `This investment was closed on ${fmtDate(inv.closedOn)}.`));
     const form = { date: today, amount: '', note: '' };
     const f = h('form', { class: 'stack', novalidate: true },
       h('p', { class: 'sub' }, 'Closing means you no longer hold it: it was sold, matured or written off. Apex then shows what you actually received and stops growing the value. You can reopen it later.'),
@@ -99,7 +99,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       await store.update(invId, c.change);
       if (c.proceeds) await store.create('entry', c.proceeds);
     }, 'Investment closed.');
-    return h('div', { class: 'flow' }, backLink, head('Close this investment'), f);
+    return h('div', { class: 'flow form-page' }, backLink, head('Close this investment'), f);
   }
   return missing('This page');
 }

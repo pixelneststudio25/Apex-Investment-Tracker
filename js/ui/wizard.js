@@ -4,6 +4,7 @@
 import { h } from './dom.js';
 import { setBusy } from './motion.js';
 import { icon } from './icons.js';
+import { confirmDialog } from './dialog.js';
 import { allocate, scheduleEntries } from '../engine/index.js';
 import { fmtDate, money, pct } from './fmt.js';
 import { checkbox, choiceList, dateInput, field, moneyField, percentField, segmented, selectInput, showErrors, textArea, textInput } from './formkit.js';
@@ -14,7 +15,7 @@ const pctShort = (f) => pct(f).replace(/\.?0+%$/, '%');
 const label = (choices, v) => (choices.find((c) => c[0] === v) || [v, v])[1];
 
 export function wizardView({ store, templates, partners, today, toast, go }) {
-  const root = h('div', { class: 'flow wizard' });
+  const root = h('div', { class: 'wizard' });
   let draft = newDraft(today), step = 'category', reg = {}, saving = false;
   const tplOf = () => templates.find((t) => t.id === draft.templateId) || null;
   const stepList = () => stepsFor(draft, tplOf());
@@ -29,27 +30,28 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     const steps = stepList(), idx = steps.indexOf(step);
     const title = h('h1', { class: 'page-title', tabindex: '-1' }, STEP_TITLES[step]);
     const body = ({ category, basics, details, money: moneyStep, value: valueStep, income: incomeStep, people: peopleStep, review })[step]();
-    root.replaceChildren(
+    // One form, so pressing Enter in a field means Continue (or Save on the last screen).
+    root.replaceChildren(h('form', { class: 'flow wizard-form', novalidate: true, onsubmit: (e) => { e.preventDefault(); if (step === 'review') save(); else if (step !== 'category') next(); } },
       h('div', { class: 'wizard-top' },
         h('button', { class: 'back back--btn', type: 'button', onclick: cancel }, icon('chevronLeft', { size: 18 }), 'Cancel'),
         h('p', { class: 'sub' }, `Step ${idx + 1} of ${steps.length}`)),
       h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '1', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(idx + 1), 'aria-label': 'Progress' },
         steps.map((s, i) => h('span', { class: i <= idx ? 'on' : '' }))),
-      title, body, footer(steps, idx));
+      title, body, footer(steps, idx)));
     title.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
 
-  function cancel() {
-    if (dirty() && !window.confirm('Discard this new investment? What you entered will be lost.')) return;
+  async function cancel() {
+    if (dirty() && !(await confirmDialog({ title: 'Discard this new investment?', body: 'What you have entered so far will be lost.', confirmLabel: 'Discard', cancelLabel: 'Keep editing', danger: true }))) return;
     go('#/investments');
   }
   function footer(steps, idx) {
     if (step === 'category') return h('div', {});
     const last = step === 'review';
-    return h('div', { class: 'row wizard-foot' },
+    return h('div', { class: 'row wizard-foot sticky-actions' },
       h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { step = steps[idx - 1]; draw(); } }, 'Back'),
-      last ? h('button', { class: 'btn', type: 'button', id: 'save-btn', onclick: save }, 'Save investment') : h('button', { class: 'btn', type: 'button', onclick: next }, 'Continue'));
+      last ? h('button', { class: 'btn', type: 'submit', id: 'save-btn' }, 'Save investment') : h('button', { class: 'btn', type: 'submit' }, 'Continue'));
   }
   function next() {
     const steps = stepList(), errs = stepErrors(draft, step, tplOf(), { today });
