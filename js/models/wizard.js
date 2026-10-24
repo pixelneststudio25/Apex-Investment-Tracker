@@ -1,250 +1,242 @@
-// The add-investment wizard: one question group per screen, then a review where everything can be changed.
-// All rules (what is valid, which steps apply, what gets saved) live in js/models/wizard.js; this file only
-// draws the screens and passes what the person typed into the draft.
-import { h } from './dom.js';
-import { icon } from './icons.js';
-import { allocate, scheduleEntries } from '../engine/index.js';
-import { fmtDate, money, pct } from './fmt.js';
-import { checkbox, choiceList, dateInput, field, moneyField, percentField, segmented, selectInput, showErrors, textArea, textInput } from './formkit.js';
-import { InputError, bpToInput, koboToInput, optionalDate, parseNaira, parseShareBp, wholeNumber, checkDate } from '../models/inputs.js';
-import { COMPOUND_CHOICES, FREQUENCY_CHOICES, INCOME_CHOICES, RATE_BASED, SOURCE_CHOICES, STEP_TITLES, VALUE_CHOICES, applyTemplate, buildPlan, hasTerm, newDraft, savePlan, stepErrors, stepsFor } from '../models/wizard.js';
+// The add-investment wizard, without any screen code: the draft the person is filling in, which steps apply,
+// what is wrong with a step, the records the draft turns into, and saving them. Keeping this separate from
+// the screens means every rule here is covered by tests that run in Node.
+import { formatNaira, scheduleEntries } from '../engine/index.js';
+import { dayNumber } from '../engine/dates.js';
+import { validate } from './schemas.js';
+import { findTemplate } from './templates.js';
+import { InputError, checkDate, optionalDate, parseNaira, parsePercent, parseShareBp, wholeNumber } from './inputs.js';
 
-const pctShort = (f) => pct(f).replace(/\.?0+%$/, '%');
-const label = (choices, v) => (choices.find((c) => c[0] === v) || [v, v])[1];
+export const VALUE_CHOICES = [
+  ['appreciation', 'Grows in value', 'Land, property, anything you expect to be worth more over time.'],
+  ['depreciation', 'Loses value', 'Cars and equipment that are worth less each year.'],
+  ['interest', 'Earns interest', 'Treasury bills, fixed deposits and loans with an agreed rate.'],
+  ['manualOnly', 'I will update the value myself', 'Businesses, crypto, stocks, farms: you enter a valuation when you know it.'],
+  ['none', 'Stays at what I paid', 'The value does not change unless you say so.'],
+];
+export const INCOME_CHOICES = [
+  ['none', 'No income', 'It does not pay anything.'],
+  ['schedule', 'Regular payments', 'Rent or a fixed amount that arrives on a set pattern.'],
+  ['irregular', 'Now and then', 'Payouts or income that come at no fixed time. You add each one when it arrives.'],
+];
+export const FREQUENCY_CHOICES = [['monthly', 'Every month'], ['quarterly', 'Every 3 months'], ['yearly', 'Every year'], ['custom', 'Every so many days']];
+export const COMPOUND_CHOICES = [['1', 'Yearly'], ['2', 'Half-yearly'], ['4', 'Quarterly'], ['12', 'Monthly'], ['365', 'Daily']];
+export const RATE_BASED = ['appreciation', 'depreciation', 'interest'];
+export const SOURCE_CHOICES = [['own_estimate', 'My own estimate'], ['agent', 'An agent'], ['comparable_sale', 'A similar sale'], ['bank', 'A bank'], ['other', 'Another source']];
 
-export function wizardView({ store, templates, partners, today, toast, go }) {
-  const root = h('div', { class: 'flow wizard' });
-  let draft = newDraft(today), step = 'category', reg = {}, saving = false;
-  const tplOf = () => templates.find((t) => t.id === draft.templateId) || null;
-  const stepList = () => stepsFor(draft, tplOf());
-  const dirty = () => !!(draft.templateId && (draft.name.trim() || draft.capital.amount.trim()));
-
-  // F registers a field under the key that stepErrors() reports, so errors land on the right input.
-  const F = (key, text, make, opts) => { const f = field(text, make, opts); reg[key] = f; return f.el; };
-  const M = (key, text, opts) => { const f = moneyField(text, opts); reg[key] = f; return f.el; };
-
-  function draw() {
-    reg = {};
-    const steps = stepList(), idx = steps.indexOf(step);
-    const title = h('h1', { class: 'page-title', tabindex: '-1' }, STEP_TITLES[step]);
-    const body = ({ category, basics, details, money: moneyStep, value: valueStep, income: incomeStep, people: peopleStep, review })[step]();
-    root.replaceChildren(
-      h('div', { class: 'wizard-top' },
-        h('button', { class: 'back back--btn', type: 'button', onclick: cancel }, icon('chevronLeft', { size: 18 }), 'Cancel'),
-        h('p', { class: 'sub' }, `Step ${idx + 1} of ${steps.length}`)),
-      h('div', { class: 'progress', role: 'progressbar', 'aria-valuemin': '1', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(idx + 1), 'aria-label': 'Progress' },
-        steps.map((s, i) => h('span', { class: i <= idx ? 'on' : '' }))),
-      title, body, footer(steps, idx));
-    title.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
-  }
-
-  function cancel() {
-    if (dirty() && !window.confirm('Discard this new investment? What you entered will be lost.')) return;
-    go('#/investments');
-  }
-  function footer(steps, idx) {
-    if (step === 'category') return h('div', {});
-    const last = step === 'review';
-    return h('div', { class: 'row wizard-foot' },
-      h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { step = steps[idx - 1]; draw(); } }, 'Back'),
-      last ? h('button', { class: 'btn', type: 'button', id: 'save-btn', onclick: save }, 'Save investment') : h('button', { class: 'btn', type: 'button', onclick: next }, 'Continue'));
-  }
-  function next() {
-    const steps = stepList(), errs = stepErrors(draft, step, tplOf(), { today });
-    if (errs.length) {
-      const first = showErrors(reg, errs);
-      if (first) first.control.focus(); else toast(errs[0].message);
-      return;
-    }
-    step = steps[steps.indexOf(step) + 1]; draw();
-  }
-
-  // ---------- 1. category ----------
-  function category() {
-    return h('div', { class: 'stack' },
-      h('p', { class: 'sub' }, 'Pick the closest match. It only sets sensible starting answers, and you can change every one of them.'),
-      h('div', { class: 'cat-grid' }, templates.map((t) => h('button', { class: 'cat', type: 'button', 'aria-pressed': String(t.id === draft.templateId),
-        onclick: () => { if (t.id !== draft.templateId) draft = applyTemplate(draft, t, today); step = 'basics'; draw(); } },
-      h('span', { class: 'tile' }, icon(t.icon)), h('span', { class: 'cat-name' }, t.name)))));
-  }
-
-  // ---------- 2. basics ----------
-  function basics() {
-    const tpl = tplOf();
-    return h('div', { class: 'stack' },
-      F('name', 'Name', textInput({ value: draft.name, onInput: (v) => { draft.name = v; }, maxlength: 120, placeholder: 'For example: Plot at Ibeju-Lekki', autocomplete: 'off' }), { hint: 'Something you will recognise at a glance.' }),
-      F('openedOn', 'Start date', dateInput({ value: draft.openedOn, onInput: (v) => { draft.openedOn = v; } }), { hint: 'The day you bought it or first put money in.' }),
-      hasTerm(tpl) && F('maturityDate', 'Maturity date', dateInput({ value: draft.maturityDate, onInput: (v) => { draft.maturityDate = v; } }), { hint: 'The day it is due to pay out.' }),
-      h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'Who owns it?'),
-        choiceList({ name: 'ownership', label: 'Who owns it', value: draft.ownership, onChange: (v) => { draft.ownership = v; draw(); },
-          options: [['sole', 'Just me'], ['shared', 'Shared with other people', 'Apex will ask who is in it and how much each person put in.']] })),
-      F('notes', 'Notes', textArea({ value: draft.notes, onInput: (v) => { draft.notes = v; }, maxlength: 5000 }), { optional: true }));
-  }
-
-  // ---------- 3. details ----------
-  function details() {
-    return h('div', { class: 'stack' }, h('p', { class: 'sub' }, `Everything here is optional. It helps you find the paperwork later.`),
-      ...(tplOf().customFieldDefs || []).map((d) => F(d.key, d.label, textInput({ value: draft.fields[d.key] ?? '', onInput: (v) => { draft.fields[d.key] = v; },
-        type: d.type === 'date' ? 'date' : 'text', inputmode: d.type === 'number' ? 'decimal' : undefined, maxlength: 500 }), { optional: true })));
-  }
-
-  // ---------- 4. money put in ----------
-  function moneyStep() {
-    return h('div', { class: 'stack' },
-      M('capital.amount', 'Amount you put in', { value: draft.capital.amount, onInput: (v) => { draft.capital.amount = v; }, hint: 'The price you paid. Later costs, like legal fees, can be added in the ledger afterwards.' }),
-      F('capital.date', 'Date paid', dateInput({ value: draft.capital.date, onInput: (v) => { draft.capital.date = v; } }), { optional: true, hint: 'Leave empty to use the start date.' }),
-      F('capital.note', 'Note', textInput({ value: draft.capital.note, onInput: (v) => { draft.capital.note = v; }, maxlength: 1000, placeholder: 'For example: Purchase price' }), { optional: true }));
-  }
-
-  // ---------- 5. value ----------
-  function valueStep() {
-    const r = draft.rate, based = RATE_BASED.includes(draft.valueChange), out = h('div', { class: 'stack' });
-    out.append(choiceList({ name: 'value', label: 'How its value changes', value: draft.valueChange, options: VALUE_CHOICES,
-      onChange: (v) => { draft.valueChange = v; if (v === 'interest') r.type = 'agreed'; else if (r.type === 'agreed') r.type = 'assumed'; draw(); } }));
-    if (based) {
-      const verb = draft.valueChange === 'depreciation' ? 'How much it loses' : draft.valueChange === 'interest' ? 'Interest rate' : 'How much it grows';
-      out.append(h('section', { class: 'stack subsection' }, h('h2', {}, 'The rate'),
-        h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'Where does this rate come from?'),
-          segmented({ label: 'Rate source', value: r.type, options: [['assumed', 'My own assumption'], ['agreed', 'Agreed with someone']], onChange: (v) => { r.type = v; } })),
-        (() => { const f = percentField(verb, { value: r.percent, onInput: (v) => { r.percent = v; }, optional: draft.valueChange !== 'interest', hint: 'Type it as you say it: 12 or 12.5. Leave it empty if you would rather not assume anything.' }); reg['rate.percent'] = f; return f.el; })(),
-        h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'Per'), segmented({ label: 'Rate period', value: r.unit, options: [['year', 'a year'], ['month', 'a month']], onChange: (v) => { r.unit = v; if (r.method === 'compound') r.per = ''; draw(); } })),
-        h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'How it adds up'),
-          segmented({ label: 'Simple or compounding', value: r.method, options: [['simple', 'Simple'], ['compound', 'Compounding']], onChange: (v) => { r.method = v; draw(); } }),
-          h('p', { class: 'hint' }, r.method === 'simple' ? 'Simple: each period adds the same amount, based on what you first put in.' : 'Compounding: what it has already gained also earns, so growth speeds up.')),
-        r.method === 'compound' && F('rate.per', 'Compounds', selectInput({ value: r.per || (r.unit === 'month' ? '12' : '1'), options: COMPOUND_CHOICES, onChange: (v) => { r.per = v; } })),
-        F('rate.from', 'Rate starts on', dateInput({ value: r.from, onInput: (v) => { r.from = v; } }), { optional: true, hint: 'Leave empty to start from the start date.' })));
-    }
-    if (draft.valueChange !== 'none') {
-      const c = draft.current;
-      out.append(h('section', { class: 'stack subsection' }, h('h2', {}, 'Its value today'),
-        h('p', { class: 'sub' }, draft.valueChange === 'manualOnly' ? 'Because you will update this by hand, enter what it is worth now if you know it. You can also do it later.' : 'Optional. A value you enter overrides the rate, because a real valuation beats an assumption.'),
-        M('current.amount', 'Worth today', { value: c.amount, allowZero: true, onInput: (v) => { c.amount = v; }, optional: true }),
-        F('current.date', 'Valuation date', dateInput({ value: c.date, onInput: (v) => { c.date = v; } })),
-        F('current.source', 'Where does the figure come from?', selectInput({ value: c.source, options: SOURCE_CHOICES, onChange: (v) => { c.source = v; } }))));
-    }
-    return out;
-  }
-
-  // ---------- 6. income ----------
-  function incomeStep() {
-    const s = draft.schedule, out = h('div', { class: 'stack' });
-    out.append(choiceList({ name: 'income', label: 'Income it pays', value: draft.income, options: INCOME_CHOICES, onChange: (v) => { draft.income = v; draw(); } }));
-    if (draft.income === 'irregular') out.append(h('p', { class: 'note-box' }, 'You will add each payout or payment from the Ledger tab when it arrives.'));
-    if (draft.income !== 'schedule') return out;
-    const past = h('div', {});
-    const drawPast = () => {
-      let info = null;
-      try {
-        const due = scheduleEntries({ amountKobo: parseNaira(s.amount), frequency: s.frequency, everyDays: s.frequency === 'custom' ? wholeNumber(s.everyDays) : null, startDate: checkDate(s.start), endDate: optionalDate(s.end), adjustments: [], skippedDates: [] }, today);
-        if (due.length) info = { count: due.length, total: due.reduce((a, e) => a + e.amountKobo, 0) };
-      } catch (e) { if (!(e instanceof InputError)) throw e; }
-      past.replaceChildren(info ? h('div', { class: 'stack' },
-        checkbox({ label: `Record the ${info.count} ${info.count === 1 ? 'payment' : 'payments'} already due (${money(info.total, { compact: false })} in total) as received`, checked: s.recordPast, onChange: (v) => { s.recordPast = v; } }),
-        h('p', { class: 'hint' }, 'Leave this off if you would rather add each payment yourself when you receive it. Apex never assumes money arrived.')) : '');
-    };
-    const on = (k) => (v) => { s[k] = v; drawPast(); };
-    out.append(h('section', { class: 'stack subsection' }, h('h2', {}, 'The regular payment'),
-      F('schedule.label', 'What is it called?', textInput({ value: s.label, onInput: (v) => { s.label = v; }, maxlength: 120, placeholder: 'For example: Yearly rent' }), { optional: true }),
-      M('schedule.amount', 'Amount each time', { value: s.amount, onInput: on('amount') }),
-      F('schedule.frequency', 'How often?', selectInput({ value: s.frequency, options: FREQUENCY_CHOICES, onChange: (v) => { s.frequency = v; draw(); } })),
-      s.frequency === 'custom' && F('schedule.everyDays', 'Number of days between payments', textInput({ value: s.everyDays, inputmode: 'numeric', onInput: on('everyDays') })),
-      F('schedule.start', 'First payment date', dateInput({ value: s.start, onInput: on('start') })),
-      F('schedule.end', 'Last payment date', dateInput({ value: s.end, onInput: on('end') }), { optional: true, hint: 'Leave empty if it carries on.' }),
-      past));
-    drawPast();
-    return out;
-  }
-
-  // ---------- 7. people ----------
-  function peopleStep() {
-    const rows = draft.people, rowsBox = h('div', { class: 'stack' });
-    const general = h('p', { class: 'alert alert--error', role: 'alert', hidden: true });
-    reg.people = { setError: (m) => { general.textContent = m || ''; general.hidden = !m; }, control: general };
-    const totals = h('p', { class: 'sub', 'aria-live': 'polite' });
-    const capital = () => { try { return parseNaira(draft.capital.amount); } catch { return null; } };
-    const drawTotals = () => {
-      let bp = 0, put = 0;
-      for (const p of rows) { try { bp += parseShareBp(p.share); } catch { /* not typed yet */ } try { put += parseNaira(p.putIn || '0', { allowZero: true }); } catch { /* not typed yet */ } }
-      const cap = capital();
-      totals.textContent = `Shares add up to ${bpToInput(bp) || '0'}% of 100%. Put in so far: ${money(put, { compact: false })}${cap != null ? ` of ${money(cap, { compact: false })}` : ''}.`;
-    };
-    const drawRows = () => {
-      for (const k of Object.keys(reg)) if (k.startsWith('people.')) delete reg[k];
-      rowsBox.replaceChildren(...rows.map((p, i) => {
-        const used = new Set(rows.map((x, j) => (j === i ? null : x.ref)));
-        const choices = [['', 'Someone new'], ...partners.filter((x) => !used.has(x.id)).map((x) => [x.id, x.name])];
-        return h('section', { class: 'person' },
-          h('div', { class: 'person-head' }, h('h2', {}, p.ref === 'me' ? 'You' : `Person ${i}`),
-            i >= 2 && h('button', { class: 'link-btn', type: 'button', onclick: () => { rows.splice(i, 1); drawRows(); drawTotals(); } }, 'Remove')),
-          p.ref !== 'me' && partners.length > 0 && F(`people.${i}.ref`, 'Who is it?', selectInput({ value: p.ref, options: choices, onChange: (v) => { p.ref = v; const known = partners.find((x) => x.id === v); if (known) p.name = known.name; drawRows(); } })),
-          p.ref !== 'me' && !p.ref && F(`people.${i}.name`, 'Name', textInput({ value: p.name, maxlength: 80, onInput: (v) => { p.name = v; } })),
-          h('div', { class: 'row row--fields' },
-            F(`people.${i}.share`, 'Share (%)', textInput({ value: p.share, inputmode: 'decimal', placeholder: 'for example 50', onInput: (v) => { p.share = v; drawTotals(); } })),
-            M(`people.${i}.putIn`, 'Put in', { value: p.putIn, allowZero: true, onInput: (v) => { p.putIn = v; drawTotals(); } })));
-      }));
-    };
-    drawRows(); drawTotals();
-    const fill = () => {
-      const cap = capital();
-      try {
-        if (cap == null) throw new InputError('Enter the money put in first (step 4).');
-        const parts = allocate(cap, rows.map((p) => parseShareBp(p.share)));
-        rows.forEach((p, i) => { p.putIn = koboToInput(parts[i]); });
-        drawRows(); drawTotals();
-      } catch (e) { if (e instanceof InputError) toast(e.message); else throw e; }
-    };
-    return h('div', { class: 'stack' },
-      h('p', { class: 'sub' }, 'List everyone in it, you included. Each share is a percentage of the whole, and what each person put in must add up to the total you entered.'),
-      general, rowsBox, totals,
-      h('div', { class: 'row' },
-        h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => { rows.push({ ref: '', name: '', share: '', putIn: '' }); drawRows(); } }, 'Add another person'),
-        h('button', { class: 'btn btn--secondary', type: 'button', onclick: fill }, 'Fill amounts from shares')));
-  }
-
-  // ---------- 8. review ----------
-  function review() {
-    const tpl = tplOf(), errs = stepErrors(draft, 'review', tpl, { today });
-    if (errs.length) {
-      return h('div', { class: 'stack' }, h('p', { class: 'alert alert--warn' }, 'A few answers need another look before this can be saved.'),
-        h('ul', { class: 'rows' }, errs.map((e) => h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, e.message),
-          h('button', { class: 'link-btn', type: 'button', onclick: () => { step = e.step; draw(); } }, 'Fix'))))));
-    }
-    const plan = buildPlan(draft, tpl, { today }), inv = plan.investment, rate = inv.rates[0];
-    const rows = (pairs) => h('dl', { class: 'defs' }, pairs.filter(Boolean).flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]));
-    const section = (title, to, pairs) => h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, title), h('button', { class: 'link-btn', type: 'button', onclick: () => { step = to; draw(); } }, 'Change')), rows(pairs));
-    const valueText = !rate ? label(VALUE_CHOICES, inv.behaviors.valueChange)
-      : `${rate.type === 'agreed' ? 'Agreed' : 'Assumed'} ${inv.behaviors.valueChange === 'depreciation' ? 'loss' : inv.behaviors.valueChange === 'interest' ? 'interest' : 'growth'} of ${pctShort(Math.abs(rate.rate))} ${rate.rateUnit === 'month' ? 'a month' : 'a year'}, ${rate.method === 'compound' ? `compounding ${label(COMPOUND_CHOICES, String(rate.compoundsPerYear)).toLowerCase()}` : 'simple'}`;
-    const sched = plan.schedule;
-    const out = h('div', { class: 'stack' }, h('p', { class: 'sub' }, 'Nothing is saved until you press Save. This is exactly what Apex will record.'),
-      section('The investment', 'basics', [['Category', tpl.name], ['Name', inv.name], ['Started', fmtDate(inv.openedOn)], inv.behaviors.term && ['Matures', fmtDate(inv.behaviors.term.maturityDate)], ['Owned', inv.behaviors.ownership === 'shared' ? 'Shared' : 'Just you'], inv.notes && ['Notes', inv.notes]]),
-      Object.keys(inv.customFields).length > 0 && section('Details', 'details', (tpl.customFieldDefs || []).filter((d) => inv.customFields[d.key] != null).map((d) => [d.label, String(inv.customFields[d.key])])),
-      section('Money put in', 'money', [['Amount', money(plan.entries[0].amountKobo, { compact: false })], ['Date', fmtDate(plan.entries[0].date)], plan.entries[0].note && ['Note', plan.entries[0].note]]),
-      section('Value', 'value', [['How it changes', valueText], plan.valuation && ['Worth today', `${money(plan.valuation.valueKobo, { compact: false })} on ${fmtDate(plan.valuation.date)} (${label(SOURCE_CHOICES, plan.valuation.source).toLowerCase()})`]]),
-      section('Income', 'income', [['Income', sched ? `${sched.label}: ${money(sched.amountKobo, { compact: false })} ${sched.frequency === 'custom' ? `every ${sched.everyDays} days` : sched.frequency}, from ${fmtDate(sched.startDate)}${sched.endDate ? ` to ${fmtDate(sched.endDate)}` : ''}` : label(INCOME_CHOICES, inv.behaviors.income)],
-        sched && plan.pastCount > 0 && ['Already due', plan.recordPast ? `${plan.pastCount} payments (${money(plan.pastTotalKobo, { compact: false })}) will be recorded as received` : `${plan.pastCount} payments, not recorded as received`]]));
-    if (plan.ownership.length) {
-      const name = (o) => (o.partnerRef.me ? 'You' : o.partnerRef.id ? partners.find((x) => x.id === o.partnerRef.id)?.name : plan.partners.find((x) => x.key === o.partnerRef.newKey)?.name);
-      out.append(section('People', 'people', plan.ownership.map((o) => [name(o), `${bpToInput(o.percentage)}%, put in ${money(o.contributionKobo, { compact: false })}`])));
-    }
-    out.append(h('p', { class: 'alert alert--error', id: 'save-error', role: 'alert', hidden: true }));
-    return out;
-  }
-
-  async function save() {
-    if (saving) return;
-    const btn = root.querySelector('#save-btn'), errBox = root.querySelector('#save-error');
-    saving = true; btn.disabled = true; btn.textContent = 'Saving…'; errBox.hidden = true;
-    try {
-      const { investmentId } = await savePlan(store, buildPlan(draft, tplOf(), { today }));
-      toast('Investment saved.');
-      go(`#/investments/${investmentId}`);
-    } catch (e) {
-      saving = false; btn.disabled = false; btn.textContent = 'Save investment';
-      errBox.hidden = false; errBox.textContent = e.code === 'INVALID' || e.code === 'INPUT' || e.code === 'LOCKED' ? e.message : 'Could not save. Nothing was changed. Please try again.';
-      if (!(e.code === 'INVALID' || e.code === 'INPUT' || e.code === 'LOCKED')) console.error(e);
-    }
-  }
-  draw();
-  return root;
+export function newDraft(today) {
+  return {
+    templateId: null, name: '', openedOn: today, maturityDate: '', ownership: 'sole', notes: '', fields: {},
+    capital: { amount: '', date: '', note: '' },
+    valueChange: 'manualOnly',
+    rate: { type: 'assumed', percent: '', unit: 'year', method: 'simple', per: '', from: '' },
+    current: { amount: '', date: today, source: 'own_estimate' },
+    income: 'none',
+    schedule: { label: '', amount: '', frequency: 'monthly', everyDays: '', start: today, end: '', recordPast: false },
+    people: [{ ref: 'me', name: 'You', share: '', putIn: '' }, { ref: '', name: '', share: '', putIn: '' }],
+  };
 }
+
+// Starting a draft from a category: its presets become the first answers, and every one can be changed.
+export function applyTemplate(draft, template, today) {
+  const b = template.defaultBehaviors;
+  return {
+    ...newDraft(today), name: draft.name, openedOn: draft.openedOn, templateId: template.id,
+    valueChange: b.valueChange, income: b.income, ownership: b.ownership,
+    rate: { ...newDraft(today).rate, type: b.valueChange === 'interest' ? 'agreed' : 'assumed' },
+  };
+}
+
+export const hasTerm = (template) => !!template?.defaultBehaviors?.term;
+
+export function stepsFor(draft, template) {
+  const steps = ['category', 'basics'];
+  if (template?.customFieldDefs?.length) steps.push('details');
+  steps.push('money', 'value', 'income');
+  if (draft.ownership === 'shared') steps.push('people');
+  steps.push('review');
+  return steps;
+}
+export const STEP_TITLES = { category: 'What kind of investment is it?', basics: 'The basics', details: 'More details', money: 'Money put in', value: 'How its value changes', income: 'Income it pays', people: 'Who shares it', review: 'Check and save' };
+
+// ---------- checking a step ----------
+// Returns a list of { field, message }. Empty means the step is fine.
+export function stepErrors(draft, step, template, { today } = {}) {
+  const errs = [];
+  const check = (field, fn) => { try { return fn(); } catch (e) { if (e instanceof InputError) { errs.push({ field, message: e.message }); return undefined; } throw e; } };
+  const fail = (field, message) => errs.push({ field, message });
+
+  if (step === 'category') { if (!draft.templateId) fail('templateId', 'Choose a category to continue.'); }
+
+  if (step === 'basics') {
+    const name = draft.name.trim();
+    if (!name) fail('name', 'Give the investment a name.'); else if (name.length > 120) fail('name', 'The name can be at most 120 characters.');
+    const opened = check('openedOn', () => checkDate(draft.openedOn, 'The start date'));
+    if (hasTerm(template)) {
+      const m = check('maturityDate', () => checkDate(draft.maturityDate, 'The maturity date'));
+      if (m && opened && dayNumber(m) < dayNumber(opened)) fail('maturityDate', 'The maturity date cannot be before the start date.');
+    }
+    if (draft.notes.length > 5000) fail('notes', 'Notes can be at most 5000 characters.');
+  }
+
+  if (step === 'details') {
+    for (const d of template?.customFieldDefs || []) {
+      const v = (draft.fields[d.key] ?? '').trim();
+      if (!v) continue;
+      if (v.length > 500) fail(d.key, 'This is too long (500 characters at most).');
+      if (d.type === 'number' && !(Number.isFinite(Number(v)) && Math.abs(Number(v)) <= 1e15)) fail(d.key, 'Enter a number.');
+      if (d.type === 'date') check(d.key, () => checkDate(v, d.label));
+    }
+  }
+
+  if (step === 'money') {
+    check('capital.amount', () => parseNaira(draft.capital.amount));
+    check('capital.date', () => optionalDate(draft.capital.date, 'The date'));
+    if (draft.capital.note.length > 1000) fail('capital.note', 'The note can be at most 1000 characters.');
+  }
+
+  if (step === 'value') {
+    if (RATE_BASED.includes(draft.valueChange)) {
+      const r = draft.rate;
+      if (r.percent.trim() === '') { if (draft.valueChange === 'interest') fail('rate.percent', 'Enter the interest rate, or choose another way its value changes.'); }
+      else check('rate.percent', () => parsePercent(r.percent));
+      check('rate.from', () => optionalDate(r.from, 'The date the rate starts'));
+      if (r.method === 'compound' && r.per !== '' && !COMPOUND_CHOICES.some(([v]) => v === r.per)) fail('rate.per', 'Choose how often it compounds.');
+    }
+    if (draft.valueChange !== 'none' && draft.current.amount.trim() !== '') {
+      check('current.amount', () => parseNaira(draft.current.amount, { allowZero: true }));
+      check('current.date', () => checkDate(draft.current.date, 'The valuation date'));
+    }
+  }
+
+  if (step === 'income' && draft.income === 'schedule') {
+    const s = draft.schedule;
+    check('schedule.amount', () => parseNaira(s.amount));
+    const start = check('schedule.start', () => checkDate(s.start, 'The first payment date'));
+    const end = check('schedule.end', () => optionalDate(s.end, 'The last payment date'));
+    if (start && end && dayNumber(end) < dayNumber(start)) fail('schedule.end', 'The last payment cannot be before the first.');
+    if (s.frequency === 'custom') check('schedule.everyDays', () => wholeNumber(s.everyDays, { label: 'The number of days' }));
+    if (s.label.length > 120) fail('schedule.label', 'The label can be at most 120 characters.');
+  }
+
+  if (step === 'people' && draft.ownership === 'shared') {
+    const rows = draft.people;
+    if (rows.length < 2) fail('people', 'A shared investment needs at least two people (you and one more).');
+    let totalBp = 0, totalPutIn = 0, allShares = true, allPutIns = true;
+    rows.forEach((p, i) => {
+      if (p.ref !== 'me' && p.ref === '' && !p.name.trim()) fail(`people.${i}.name`, 'Enter this person’s name.');
+      const bp = check(`people.${i}.share`, () => parseShareBp(p.share));
+      if (bp === undefined) allShares = false; else totalBp += bp;
+      const k = check(`people.${i}.putIn`, () => parseNaira(p.putIn || '0', { allowZero: true }));
+      if (k === undefined) allPutIns = false; else totalPutIn += k;
+    });
+    const refs = rows.map((p) => p.ref).filter((r) => r);
+    if (new Set(refs).size !== refs.length) fail('people', 'The same person is listed twice.');
+    if (allShares && totalBp !== 10000) fail('people', `Shares must add up to 100%. They add up to ${(totalBp / 100).toFixed(2).replace(/\.?0+$/, '')}%.`);
+    let capital; try { capital = parseNaira(draft.capital.amount); } catch { capital = null; }
+    if (allPutIns && capital != null && totalPutIn !== capital) {
+      fail('people', `What everyone put in must equal the money put in for the investment (${formatNaira(capital)}). It adds up to ${formatNaira(totalPutIn)}.`);
+    }
+  }
+
+  if (step === 'review') {
+    for (const s of stepsFor(draft, template)) if (s !== 'review') errs.push(...stepErrors(draft, s, template, { today }).map((e) => ({ ...e, step: s })));
+  }
+  return errs;
+}
+
+// ---------- the records a draft becomes ----------
+export function buildPlan(draft, template, { today }) {
+  const errs = stepErrors(draft, 'review', template, { today });
+  if (errs.length) throw new InputError(errs[0].message);
+  const opened = draft.openedOn;
+  const rateBased = RATE_BASED.includes(draft.valueChange);
+
+  const rates = [];
+  if (rateBased && draft.rate.percent.trim() !== '') {
+    const f = parsePercent(draft.rate.percent);
+    const compound = draft.rate.method === 'compound';
+    rates.push({
+      type: draft.rate.type, rate: draft.valueChange === 'depreciation' ? -f : f, rateUnit: draft.rate.unit,
+      method: draft.rate.method, compoundsPerYear: compound ? Number(draft.rate.per || (draft.rate.unit === 'month' ? '12' : '1')) : null,
+      effectiveFrom: optionalDate(draft.rate.from) || opened, effectiveTo: null, label: '',
+    });
+  }
+  const customFields = {};
+  for (const d of template.customFieldDefs || []) {
+    const v = (draft.fields[d.key] ?? '').trim();
+    if (v) customFields[d.key] = d.type === 'number' ? Number(v) : v;
+  }
+  const investment = {
+    name: draft.name.trim(), categoryId: template.id, status: 'active', openedOn: opened, closedOn: null, notes: draft.notes.trim(),
+    behaviors: { valueChange: draft.valueChange, income: draft.income, ownership: draft.ownership, term: hasTerm(template) ? { maturityDate: draft.maturityDate } : null },
+    rates, customFields, coverImageRef: null,
+  };
+  const entries = [{ date: optionalDate(draft.capital.date) || opened, kind: 'capital_in', amountKobo: parseNaira(draft.capital.amount), note: draft.capital.note.trim() }];
+
+  let valuation = null;
+  if (draft.valueChange !== 'none' && draft.current.amount.trim() !== '') {
+    valuation = { date: draft.current.date, valueKobo: parseNaira(draft.current.amount, { allowZero: true }), source: draft.current.source, note: '' };
+  }
+  let schedule = null, pastCount = 0, pastTotalKobo = 0;
+  if (draft.income === 'schedule') {
+    const s = draft.schedule, custom = s.frequency === 'custom';
+    schedule = {
+      kind: 'income', label: s.label.trim() || 'Regular income', amountKobo: parseNaira(s.amount), frequency: s.frequency,
+      everyDays: custom ? wholeNumber(s.everyDays, { label: 'The number of days' }) : null, startDate: s.start, endDate: optionalDate(s.end),
+      adjustments: [], skippedDates: [], status: 'active',
+    };
+    const due = scheduleEntries(schedule, today);
+    pastCount = due.length; pastTotalKobo = due.reduce((a, e) => a + e.amountKobo, 0);
+  }
+  const partners = [], ownership = [];
+  if (draft.ownership === 'shared') {
+    draft.people.forEach((p, i) => {
+      let partnerRef;
+      if (p.ref === 'me') partnerRef = { me: true };
+      else if (p.ref) partnerRef = { id: p.ref };
+      else { partners.push({ key: `new${i}`, name: p.name.trim() }); partnerRef = { newKey: `new${i}` }; }
+      ownership.push({ partnerRef, contributionKobo: parseNaira(p.putIn || '0', { allowZero: true }), percentage: parseShareBp(p.share), effectiveFrom: opened, effectiveTo: null });
+    });
+  }
+  const plan = { investment, entries, valuation, schedule, recordPast: !!(schedule && draft.schedule.recordPast && pastCount > 0), pastCount, pastTotalKobo, partners, ownership, today };
+
+  // Run every record through the real validation now, so a mistake is found before anything is saved.
+  validate('investment', investment);
+  for (const e of entries) validate('entry', { ...e, investmentId: 'pending' });
+  if (valuation) validate('valuation', { ...valuation, investmentId: 'pending' });
+  if (schedule) validate('schedule', { ...schedule, investmentId: 'pending' });
+  for (const p of partners) validate('partner', { name: p.name });
+  for (const o of ownership) validate('ownership', { investmentId: 'pending', partnerId: o.partnerRef.me ? 'me' : 'pending', contributionKobo: o.contributionKobo, percentage: o.percentage, effectiveFrom: o.effectiveFrom, effectiveTo: o.effectiveTo });
+  return plan;
+}
+
+// Saves a plan. The store saves one record at a time, so if anything fails part-way the records already made
+// are removed again (soft delete) and the error is passed on: no half-made investment is left on the list.
+export async function savePlan(store, plan) {
+  const made = [];
+  const mk = async (type, data) => { const r = await store.create(type, data); made.push(r.id); return r; };
+  try {
+    const partnerIds = new Map();
+    for (const p of plan.partners) partnerIds.set(p.key, (await mk('partner', { name: p.name })).id);
+    const inv = await mk('investment', plan.investment);
+    for (const e of plan.entries) await mk('entry', { ...e, investmentId: inv.id });
+    if (plan.valuation) await mk('valuation', { ...plan.valuation, investmentId: inv.id });
+    if (plan.schedule) {
+      const s = await mk('schedule', { ...plan.schedule, investmentId: inv.id });
+      if (plan.recordPast) {
+        for (const d of scheduleEntries(s, plan.today)) await mk('entry', { investmentId: inv.id, date: d.date, kind: 'income', amountKobo: d.amountKobo, note: '', linkedScheduleId: s.id });
+      }
+    }
+    for (const o of plan.ownership) {
+      const partnerId = o.partnerRef.me ? 'me' : o.partnerRef.id || partnerIds.get(o.partnerRef.newKey);
+      await mk('ownership', { investmentId: inv.id, partnerId, contributionKobo: o.contributionKobo, percentage: o.percentage, effectiveFrom: o.effectiveFrom, effectiveTo: o.effectiveTo });
+    }
+    return { investmentId: inv.id };
+  } catch (e) {
+    for (const id of made.reverse()) { try { await store.remove(id); } catch { /* best effort */ } }
+    throw e;
+  }
+}
+
+export { findTemplate };
