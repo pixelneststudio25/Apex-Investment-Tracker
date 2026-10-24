@@ -10,8 +10,10 @@ function pinPad({ subtitle, onEntered }) {
   const render = () => dots.forEach((d, i) => d.classList.toggle('on', i < value.length));
 
   const api = {
-    setMessage(text, isError = false) { msg.textContent = text; msg.classList.toggle('pin-msg--error', isError); },
-    clear() { value = ''; render(); },
+    setMessage(text, isError = false) { msg.textContent = text; msg.classList.remove('pin-msg--busy'); msg.classList.toggle('pin-msg--error', isError); },
+    // Spinner beside the message and a wave across the dots while work is happening.
+    setBusy(text) { msg.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), text); msg.classList.remove('pin-msg--error'); msg.classList.add('pin-msg--busy'); dotsRow.classList.add('busy'); },
+    clear() { value = ''; dotsRow.classList.remove('busy'); render(); },
     fail(text) {
       api.clear(); api.setMessage(text, true);
       dotsRow.classList.remove('shake'); void dotsRow.offsetWidth; dotsRow.classList.add('shake');
@@ -24,8 +26,8 @@ function pinPad({ subtitle, onEntered }) {
     try { navigator.vibrate?.(8); } catch { /* not supported */ }
     value += d; render();
     if (value.length < 4) return;
-    busy = true; api.setMessage('Unlocking…');
-    try { await onEntered(value, api); } catch (e) { api.fail(e?.message || 'Something went wrong.'); } finally { busy = false; }
+    busy = true; api.setBusy('Unlocking…');
+    try { await onEntered(value, api); } catch (e) { api.fail(e?.message || 'Something went wrong.'); } finally { busy = false; dotsRow.classList.remove('busy'); }
   }
   const back = () => { if (!busy) { value = value.slice(0, -1); render(); } };
 
@@ -63,7 +65,7 @@ export function pinSetupView({ onSet, onSkip }) {
     onEntered: async (pin, api) => {
       if (!first) { first = pin; api.clear(); api.setMessage('Enter the same PIN again to confirm.'); title.textContent = 'Confirm your PIN'; return; }
       if (pin !== first) { first = null; title.textContent = 'Set a PIN'; throw new Error('Those did not match. Please start again.'); }
-      api.setMessage('Securing…'); await onSet(pin);
+      api.setBusy('Securing…'); await onSet(pin);
     },
   });
   title = h('h1', {}, 'Set a PIN');

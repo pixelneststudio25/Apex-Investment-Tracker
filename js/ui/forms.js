@@ -1,6 +1,7 @@
 // Screens for single records: add or edit a ledger entry, add or edit a valuation, close an investment.
 // What counts as valid lives in js/models/records.js; this file draws the form and saves the result.
 import { h } from './dom.js';
+import { setBusy } from './motion.js';
 import { icon } from './icons.js';
 import { fmtDate } from './fmt.js';
 import { choiceList, dateInput, field, moneyField, selectInput, textArea } from './formkit.js';
@@ -30,10 +31,10 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
     e.preventDefault();
     if (busy) return;
     busy = true; showError('');
-    const btn = form.querySelector('button[type=submit]'), text = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
+    const btn = form.querySelector('button[type=submit]'); setBusy(btn, true);
     try { await work(); toast(doneText); go(back); }
     catch (err) {
-      busy = false; btn.disabled = false; btn.textContent = text;
+      busy = false; setBusy(btn, false);
       if (err instanceof InputError || err.code === 'INVALID' || err.code === 'LOCKED') showError(err.message);
       else { showError('Could not save. Nothing was changed. Please try again.'); console.error(err); }
     }

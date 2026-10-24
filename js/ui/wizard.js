@@ -2,6 +2,7 @@
 // All rules (what is valid, which steps apply, what gets saved) live in js/models/wizard.js; this file only
 // draws the screens and passes what the person typed into the draft.
 import { h } from './dom.js';
+import { setBusy } from './motion.js';
 import { icon } from './icons.js';
 import { allocate, scheduleEntries } from '../engine/index.js';
 import { fmtDate, money, pct } from './fmt.js';
@@ -234,13 +235,13 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
   async function save() {
     if (saving) return;
     const btn = root.querySelector('#save-btn'), errBox = root.querySelector('#save-error');
-    saving = true; btn.disabled = true; btn.textContent = 'Saving…'; errBox.hidden = true;
+    saving = true; setBusy(btn, true); errBox.hidden = true;
     try {
       const { investmentId } = await savePlan(store, buildPlan(draft, tplOf(), { today }));
       toast('Investment saved.');
       go(`#/investments/${investmentId}`);
     } catch (e) {
-      saving = false; btn.disabled = false; btn.textContent = 'Save investment';
+      saving = false; setBusy(btn, false);
       errBox.hidden = false; errBox.textContent = e.code === 'INVALID' || e.code === 'INPUT' || e.code === 'LOCKED' ? e.message : 'Could not save. Nothing was changed. Please try again.';
       if (!(e.code === 'INVALID' || e.code === 'INPUT' || e.code === 'LOCKED')) console.error(e);
     }

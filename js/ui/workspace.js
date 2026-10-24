@@ -2,6 +2,7 @@
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
 import { h } from './dom.js';
+import { setBusy, withBusy } from './motion.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
 import { fmtDate, fmtMonthYear, greeting, money, pct, setHidden, todayISO, tone } from './fmt.js';
@@ -96,14 +97,14 @@ export function mountWorkspace({ data, email, actions }) {
   const sampleLive = async (store) => !!(await store.meta.get('sampleIds'));
 
   async function addSample(ctx, button) {
-    button.disabled = true; button.textContent = 'Adding sample investments…';
+    setBusy(button, true);
     try {
       const ids = await seedSamplePortfolio(ctx.store);
       await ctx.store.meta.set('sampleIds', ids);
       toast('Sample portfolio added. Remove it any time in Settings.');
       location.hash = '#/';
       if (location.hash === '#/') render();
-    } catch (e) { button.disabled = false; button.textContent = 'Try the sample portfolio'; toast('Could not add the sample portfolio.'); throw e; }
+    } catch (e) { setBusy(button, false); toast('Could not add the sample portfolio.'); throw e; }
   }
   async function removeSample(ctx) {
     const ids = await ctx.store.meta.get('sampleIds');
@@ -346,8 +347,10 @@ export function mountWorkspace({ data, email, actions }) {
       h('button', { class: 'btn', type: 'submit' }, 'Save'), saved);
     profile.addEventListener('submit', async (e) => {
       e.preventDefault();
-      settings = await ctx.pf.updateSettings({ displayName: name.value, portfolioName: pname.value });
-      paintChrome('settings'); saved.textContent = 'Saved.';
+      await withBusy(profile.querySelector('button[type=submit]'), async () => {
+        settings = await ctx.pf.updateSettings({ displayName: name.value, portfolioName: pname.value });
+        paintChrome('settings'); saved.textContent = 'Saved.';
+      });
     });
     const choice = (label, options, current, onPick) => {
       const g = h('div', { class: 'seg', role: 'group', 'aria-label': label });
@@ -363,7 +366,7 @@ export function mountWorkspace({ data, email, actions }) {
     const scale = choice('Text size', [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']], settings.textScale, async (v) => { settings = await ctx.pf.updateSettings({ textScale: v }); applyAppearance(); });
     const hide = h('input', { type: 'checkbox', id: 'hide' }); hide.checked = !!settings.hideAmounts;
     hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); paintChrome('settings'); });
-    const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => removeSample(ctx) }, 'Remove the sample portfolio') : sampleButton(ctx);
+    const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => removeSample(ctx)) }, 'Remove the sample portfolio') : sampleButton(ctx);
 
     return h('div', { class: 'settings flow' }, h('h1', { class: 'page-title' }, 'Settings'),
       h('section', {}, sectionHead('Profile'), profile),
