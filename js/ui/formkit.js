@@ -124,6 +124,37 @@ export function slideThumb(group) {
   return place;
 }
 
+// A slider that snaps to a few named stops (text size is the first user). Native <input type="range"> underneath, so arrow keys,
+// Home and End, touch dragging and screen readers all work with no extra code; the name of the stop is what a screen reader hears.
+//   stops: [[value, name]]. onPreview(stop) runs while the thumb moves; onChange(stop) runs once the person lets go or presses a key.
+// The coloured fill is drawn through the --p custom property (CSSOM only: the site's security policy blocks style attributes).
+export function stepSlider({ label, stops, value, onPreview, onChange, hint }) {
+  const id = nextId('s');
+  const last = stops.length - 1;
+  const at = (v) => Math.max(0, stops.findIndex(([x]) => x === v));
+  const input = h('input', { class: 'slider-input', id, type: 'range', min: 0, max: last, step: 1, value: at(value) });
+  const paint = () => {
+    const i = Number(input.value), [v, name] = stops[i];
+    input.style.setProperty('--p', String(last ? i / last : 0));
+    input.setAttribute('aria-valuetext', name);
+    return [v, name];
+  };
+  input.addEventListener('input', () => onPreview?.(paint()));
+  input.addEventListener('change', () => onChange?.(paint()));
+  paint();
+  const ticks = h('div', { class: 'slider-ticks', 'aria-hidden': 'true' }, stops.map(() => h('span', {})));
+  const hintEl = hint && h('p', { class: 'hint', id: `${id}-hint` }, hint);
+  if (hintEl) input.setAttribute('aria-describedby', `${id}-hint`);
+  const el = h('div', { class: 'field slider' },
+    h('label', { for: id }, label),
+    h('div', { class: 'slider-row' },
+      h('span', { class: 'slider-a slider-a--small', 'aria-hidden': 'true' }, 'A'),
+      h('div', { class: 'slider-track' }, input, ticks),
+      h('span', { class: 'slider-a slider-a--large', 'aria-hidden': 'true' }, 'A')),
+    hintEl);
+  return { el, input, current: () => stops[Number(input.value)] };
+}
+
 export function checkbox({ label, checked, onChange, asSwitch = false }) {
   const id = nextId('c');
   const el = h('input', { type: 'checkbox', id, checked: checked || undefined });

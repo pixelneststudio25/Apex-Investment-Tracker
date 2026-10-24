@@ -3,7 +3,8 @@
 // On phones it drops down from the top and the list scrolls above the keyboard.
 // Nothing here uses innerHTML or inline styles (the security policy forbids both).
 //
-//   openPalette({ load: async () => [{ id, group, label, sub, icon, keywords, run }], isAlive: () => true })
+//   openPalette({ load: async () => [{ id, group, label, sub, icon, keywords, run, searchOnly }], isAlive: () => true })
+//   searchOnly: true keeps an entry out of the list shown before anything is typed.
 import { h } from './dom.js';
 import { icon } from './icons.js';
 
@@ -25,7 +26,7 @@ export function score(query, text) {
 export function rank(items, query, { limit = 12, idle = 6 } = {}) {
   const q = String(query || '').trim();
   if (!q) {
-    const rest = items.filter((i) => i.group !== 'Investments');
+    const rest = items.filter((i) => i.group !== 'Investments' && !i.searchOnly); // searchOnly: appears only once something is typed (the Help entries)
     return [...rest, ...items.filter((i) => i.group === 'Investments').slice(0, idle)];
   }
   return items

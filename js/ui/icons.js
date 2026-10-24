@@ -48,6 +48,17 @@ const PATHS = {
   checkCircle: `${ring(12, 12, 9)}M8 12l3 3 5-6`,
   arrowRight: 'M5 12h14M13 6l6 6-6 6',
   backspace: 'M21 5H9l-6 7 6 7h12zM15 9l-4 4M11 9l4 4',
+  // Added for the Help section and the text-size slider.
+  help: `${ring(12, 12, 9)}M9.6 9.4a2.5 2.5 0 014.9.6c0 1.6-2.5 2-2.5 3.4M12 17h.01`,
+  book: 'M5 4h13a1 1 0 011 1v14H7a2 2 0 00-2 2zM5 19a2 2 0 012-2h12M9 8h6',
+  flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+  calculator: 'M6 3h12v18H6zM9 7h6M9 12h.01M12 12h.01M15 12h.01M9 16h.01M12 16h.01M15 16h.01',
+  receipt: 'M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6',
+  balance: 'M12 4v16M7 20h10M4 7h16M4 7l-2.5 6a3 3 0 005 0zM20 7l-2.5 6a3 3 0 005 0z',
+  undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-4',
+  command: 'M9 6a3 3 0 10-3 3h12a3 3 0 10-3-3v12a3 3 0 103 3H6a3 3 0 103-3z',
+  bulb: 'M9 18h6M10 21h4M12 3a6 6 0 00-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0012 3z',
+  textSize: 'M3 19l5-13 5 13M5 14h6M15 19l3-8 3 8M16.2 17h3.6',
 };
 
 export const iconNames = Object.keys(PATHS);

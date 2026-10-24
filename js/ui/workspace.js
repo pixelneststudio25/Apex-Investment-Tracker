@@ -3,7 +3,7 @@
 // engine through js/models/portfolio.js; this file only arranges and words it.
 import { h } from './dom.js';
 import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
-import { slideThumb } from './formkit.js';
+import { slideThumb, stepSlider } from './formkit.js';
 import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
@@ -16,6 +16,8 @@ import { StoreError } from '../core/store.js';
 import { wizardView } from './wizard.js';
 import { recordFormView } from './forms.js';
 import { isPaletteOpen, openPalette } from './palette.js';
+import { helpLink, helpView } from './help.js';
+import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
 const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1] };
 const SOURCE = { own_estimate: 'your own estimate', agent: 'an agent', comparable_sale: 'a comparable sale', bank: 'a bank', other: 'another source' };
@@ -46,8 +48,9 @@ const pillPct = (net, roi) => { const t = tone(net); return h('span', { class: `
 const stat = (label, value, cls = '') => h('div', {}, h('dt', {}, label), h('dd', { class: `money ${cls}` }, value));
 const signed = (kobo) => h('span', { class: `money ${tone(kobo)}` }, amt(kobo, { sign: true }));
 const sectionHead = (title, right) => h('div', { class: 'section-head' }, h('h2', {}, title), right);
-const emptyBlock = ({ iconName, title, text, actions, hero = false }) => h('div', { class: hero ? 'empty panel empty--hero' : 'empty' },
-  h('span', { class: 'empty-art' }, icon(iconName, { size: 30 })), h('h2', {}, title), h('p', {}, text), actions && h('div', { class: 'row' }, actions));
+const emptyBlock = ({ iconName, title, text, actions, hero = false, help = null }) => h('div', { class: hero ? 'empty panel empty--hero' : 'empty' },
+  h('span', { class: 'empty-art' }, icon(iconName, { size: 30 })), h('h2', {}, title), h('p', {}, text), actions && h('div', { class: 'row' }, actions),
+  help && helpLink(help.topic, help.text));
 const tintOf = (id) => { let n = 0; for (const ch of String(id)) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return `tint-${(n % 6) + 1}`; };
 const miniEmpty = (iconName, text) => h('div', { class: 'mini-empty' }, icon(iconName, { size: 20 }), text);
 const rise = (el, i) => { if (el && !prefersReducedMotion()) { el.classList.add('rise'); el.style.setProperty('--i', String(i)); } return el; };
@@ -177,12 +180,13 @@ export function mountWorkspace({ data, email, actions }) {
   }
   const sampleLive = async (store) => !!(await store.meta.get('sampleIds'));
 
-  async function addSample(ctx, button) {
+  async function addSample(ctx, button, { stay = false } = {}) {
     setBusy(button, true);
     try {
       const ids = await seedSamplePortfolio(ctx.store);
       await ctx.store.meta.set('sampleIds', ids);
       toast('Sample portfolio added. Remove it any time in Settings.');
+      if (stay) { render(); return; }
       location.hash = '#/';
       if (location.hash === '#/') render();
     } catch (e) { setBusy(button, false); toast('Could not add the sample portfolio.'); throw e; }
@@ -213,7 +217,7 @@ export function mountWorkspace({ data, email, actions }) {
   const firstRun = (ctx, where) => emptyBlock({
     hero: where === 'home', iconName: 'landmark', title: 'Nothing on record yet',
     text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
-    actions: [addLink(), sampleButton(ctx)] });
+    actions: [addLink(), sampleButton(ctx)], help: { topic: 'start', text: 'New to Apex? Read the 5-minute guide' } });
 
   // ---------- Home: quick actions and the investment cards ----------
   const activeOf = (items) => items.filter((it) => !it.error && it.metrics.basis !== 'realized');
@@ -269,7 +273,7 @@ export function mountWorkspace({ data, email, actions }) {
       h('span', { class: 'setup-check', 'aria-hidden': 'true' }, x.done && icon('check', { size: 16 })),
       h('div', { class: 'setup-text' }, h('p', { class: 'setup-title' }, x.title, x.done && h('span', { class: 'sr-only' }, ' (done)')), !x.done && h('p', { class: 'sub' }, x.text)),
       !x.done && x.act)));
-    const more = h('div', { class: 'setup-more', id: 'setup-more', hidden: true }, bar, list, h('div', { class: 'setup-foot' }, hide));
+    const more = h('div', { class: 'setup-more', id: 'setup-more', hidden: true }, bar, list, h('div', { class: 'setup-foot' }, helpLink('start', 'Read the 5-minute guide'), hide));
     const ring = h('span', { class: 'setup-ring', 'aria-hidden': 'true' }, h('span', {}, `${done}/${steps.length}`));
     ring.style.setProperty('--p', String(done / steps.length));
     const toggle = h('button', { class: 'setup-toggle', type: 'button', 'aria-expanded': 'false', 'aria-controls': 'setup-more',
@@ -473,7 +477,8 @@ export function mountWorkspace({ data, email, actions }) {
       h('li', {}, `Net gain = ${money(m.totalValueKobo, { compact: false })} (worth or proceeds) + ${money(m.incomeKobo, { compact: false })} (income) − ${money(m.investedKobo, { compact: false })} (invested) − ${money(m.costsKobo, { compact: false })} (costs) = ${money(m.netGainKobo, { compact: false })}.`),
       h('li', {}, `Return on investment = net gain ÷ (invested + costs) = ${pct(m.roi)}.`),
       ann.method === 'cagr' && h('li', {}, 'Annualized return (CAGR) is the yearly rate that turns the money invested into the final value over the days held.'),
-      ann.method === 'xirr' && h('li', {}, 'Annualized return (XIRR) is the yearly rate at which every dated payment in and out balances to zero.')));
+      ann.method === 'xirr' && h('li', {}, 'Annualized return (XIRR) is the yearly rate at which every dated payment in and out balances to zero.')),
+      h('p', { class: 'working-more' }, helpLink('numbers', 'Reading your numbers, with a worked example')));
 
     // tabs
     const panels = {};
@@ -486,7 +491,7 @@ export function mountWorkspace({ data, email, actions }) {
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
       h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
       h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : emptyBlock({ iconName: 'list', title: 'Nothing in the ledger yet', text: closed ? 'This investment is closed, so there is nothing to add. Reopen it if you need to record more.' : 'Every payment into or out of this investment is listed here, newest first. Add the first one to get started.',
-        actions: !closed && h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry') }),
+        actions: !closed && h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), help: { topic: 'income-costs', text: 'How entries work' } }),
       b.entries.length > 0 && h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Money leaving you shows as minus and money reaching you as plus. Open an entry to edit or delete it.`));
     panels.people = () => {
       const name = (pid) => (pid === 'me' ? 'You' : b.partners.find((p) => p.id === pid)?.name || 'Partner');
@@ -559,13 +564,19 @@ export function mountWorkspace({ data, email, actions }) {
         });
         return b;
       }));
-    const choice = (label, options, current, onPick) => {
-      const g = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': label });
-      options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === current), onclick: async () => { [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); await onPick(v); } }, l)));
-      slideThumb(g);
-      return g;
-    };
-    const scale = choice('Text size', [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']], settings.textScale, async (v) => { settings = await ctx.pf.updateSettings({ textScale: v }); applyAppearance(); });
+    // text size: a four-stop slider with a preview that resizes as you drag. The size is saved when you let go.
+    const SIZES = [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']];
+    const prevName = h('span', { class: 'size-preview-name' }), prevPct = h('span', {});
+    const prev = h('div', { class: 'size-preview', 'aria-hidden': 'true' },
+      h('p', { class: 'size-preview-top' }, prevName, prevPct),
+      h('p', { class: 'size-preview-amount money' }, '₦18,500,000', h('span', { class: 'dec' }, '.00')),
+      h('p', { class: 'size-preview-text' }, 'Your rent for this year has been received.'));
+    const paintPreview = ([v, name]) => { prev.style.setProperty('--pv', String(v / 100)); prevName.textContent = name; prevPct.textContent = `${v}%`; };
+    const slider = stepSlider({ label: 'Text size', stops: SIZES, value: settings.textScale || 100, hint: 'Drag to preview. The size applies everywhere when you let go.',
+      onPreview: paintPreview,
+      onChange: async ([v]) => { try { settings = await ctx.pf.updateSettings({ textScale: v }); applyAppearance(); } catch (e) { toast('Could not save the text size.'); console.error(e); } } });
+    paintPreview(slider.current());
+    const scale = h('div', { class: 'size-control' }, slider.el, prev);
     const hide = h('input', { type: 'checkbox', id: 'hide' }); hide.checked = !!settings.hideAmounts;
     hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); flashAmounts(); paintChrome('settings'); });
     const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => removeSample(ctx)) }, 'Remove the sample portfolio') : sampleButton(ctx);
@@ -578,6 +589,8 @@ export function mountWorkspace({ data, email, actions }) {
             h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn)),
         h('div', { class: 'settings-col' },
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
+            h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
             h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
             h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'))),
@@ -585,6 +598,19 @@ export function mountWorkspace({ data, email, actions }) {
             h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'))),
           h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Danger zone'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
             h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))))));
+  }
+
+  // ---------- Help ----------
+  async function helpScreen(ctx, parts) {
+    const [invs, ids] = await Promise.all([ctx.pf.investments(), ctx.store.meta.get('sampleIds')]);
+    const mine = new Set((ids && ids.investments) || []);
+    return helpView({
+      parts, shortcut,
+      investments: invs.map((i) => ({ id: i.id, name: i.name, status: i.status, sample: mine.has(i.id) })),
+      sample: { live: !!ids, ids: ids || { investments: [] } },
+      addSample: (button) => addSample(ctx, button, { stay: true }),
+      openSearch: () => showPalette(),
+    });
   }
 
   // ---------- search and commands (Ctrl+K) ----------
@@ -607,7 +633,9 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
       cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
+      cmd('Go to', 'How to use Apex', 'book', () => go(HELP_ROUTE.home), 'help guide tutorial learn start glossary questions faq'),
     ].filter(Boolean);
+    for (const it of helpSearchItems()) list.push({ group: it.group, label: it.label, sub: it.sub, icon: it.icon, keywords: it.keywords, searchOnly: true, run: () => go(it.hash) });
     const closedOf = (i) => i.status === 'closed';
     for (const inv of [...invs].sort((a, b) => (closedOf(a) - closedOf(b)) || a.name.localeCompare(b.name))) {
       const c = ctx.cat(inv.categoryId);
@@ -631,7 +659,7 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' || page === 'help' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
     root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3));
@@ -647,6 +675,7 @@ export function mountWorkspace({ data, email, actions }) {
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);
       else if (page === 'settings') view = await settingsView(ctx);
+      else if (page === 'help') view = await helpScreen(ctx, parts);
       else view = await homeView(ctx);
       if (mine !== token) return;
       paintChrome(key);

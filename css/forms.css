@@ -117,9 +117,11 @@ html.dialog-open { overflow: hidden; }
 @keyframes dialog-out { to { opacity: 0; transform: scale(0.97); } }
 
 /* ======== 4E: onboarding polish ======== */
-/* Choice chips never overflow: segments share the width equally and their words wrap instead of running out. */
+/* Choice chips never overflow and never break inside a word. Segments share the width equally, words wrap between
+   words only, and a segment can never be narrower than its longest word (min-content), even at the largest text size. */
 .wizard .seg, .settings .seg, .form-page .seg { display: flex; width: 100%; }
-.wizard .seg button, .settings .seg button, .form-page .seg button { flex: 1 1 0; min-width: 0; min-height: 44px; padding: 8px var(--space-2); white-space: normal; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; }
+.wizard .seg button, .settings .seg button, .form-page .seg button { flex: 1 1 0; min-width: min-content; min-height: 44px; padding: 8px var(--space-3); white-space: normal; line-height: 1.2; text-wrap: balance; overflow-wrap: normal; word-break: normal; hyphens: none; }
+@media (max-width: 359.98px) { .wizard .seg button, .settings .seg button, .form-page .seg button { padding-inline: var(--space-2); } }
 
 /* Header: a quiet close, a count, a slim progress bar. */
 .wizard-top { align-items: center; }
@@ -156,3 +158,24 @@ html.dialog-open { overflow: hidden; }
 .row > .btn--grow { flex: 1 1 0; white-space: nowrap; }
 .sticky-actions .btn { white-space: nowrap; }
 .wizard-foot { gap: var(--space-3); }
+
+/* ---- step slider (Settings > Text size; stepSlider in formkit.js) ---- */
+.slider { --thumb: 28px; }
+.slider-row { display: flex; align-items: center; gap: var(--space-3); }
+.slider-a { flex: none; width: 1.5rem; text-align: center; font-family: var(--font-serif); line-height: 1; color: var(--text-muted); user-select: none; -webkit-user-select: none; }
+.slider-a--small { font-size: 0.95rem; }
+.slider-a--large { font-size: 1.9rem; color: var(--text); }
+.slider-track { position: relative; flex: 1; min-width: 0; height: var(--tap-min); display: flex; align-items: center; }
+.slider-input { --p: 0; -webkit-appearance: none; appearance: none; position: relative; z-index: 1; width: 100%; height: var(--tap-min); margin: 0; padding: 0; background: transparent; cursor: pointer; touch-action: pan-y; }
+.slider-input:focus { outline: none; }
+.slider-input::-webkit-slider-runnable-track { height: 6px; border-radius: var(--radius-pill); background: linear-gradient(to right, var(--accent) calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--p)), var(--border-strong) 0); }
+.slider-input::-moz-range-track { height: 6px; border-radius: var(--radius-pill); background: var(--border-strong); }
+.slider-input::-moz-range-progress { height: 6px; border-radius: var(--radius-pill); background: var(--accent); }
+.slider-input::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: var(--thumb); height: var(--thumb); margin-top: calc((6px - var(--thumb)) / 2); border: 2px solid var(--accent); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-2); transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.slider-input::-moz-range-thumb { box-sizing: border-box; width: var(--thumb); height: var(--thumb); border: 2px solid var(--accent); border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-2); transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
+.slider-input:active::-webkit-slider-thumb { transform: scale(1.1); }
+.slider-input:active::-moz-range-thumb { transform: scale(1.1); }
+.slider-input:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus-ring) 30%, transparent), var(--shadow-2); }
+.slider-input:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus-ring) 30%, transparent), var(--shadow-2); }
+.slider-ticks { position: absolute; left: calc(var(--thumb) / 2); right: calc(var(--thumb) / 2); top: calc(50% + 11px); display: flex; justify-content: space-between; pointer-events: none; }
+.slider-ticks > span { width: 2px; height: 7px; margin-inline: -1px; border-radius: 1px; background: var(--border-strong); }
