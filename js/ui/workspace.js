@@ -5,7 +5,7 @@ import { h } from './dom.js';
 import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
 import { slideThumb } from './formkit.js';
 import { icon } from './icons.js';
-import { donut, lineChart, segmentClass } from './charts.js';
+import { donut, ghostChart, lineChart, segmentClass } from './charts.js';
 import { amtText, fmtDate, fmtMonthYear, greeting, isHidden, money, pct, setHidden, todayISO, tone } from './fmt.js';
 import { addMonths } from '../engine/index.js';
 import { createPortfolio } from '../models/portfolio.js';
@@ -46,6 +46,7 @@ const signed = (kobo) => h('span', { class: `money ${tone(kobo)}` }, amt(kobo, {
 const sectionHead = (title, right) => h('div', { class: 'section-head' }, h('h2', {}, title), right);
 const emptyBlock = ({ iconName, title, text, actions, hero = false }) => h('div', { class: hero ? 'empty panel empty--hero' : 'empty' },
   h('span', { class: 'empty-art' }, icon(iconName, { size: 30 })), h('h2', {}, title), h('p', {}, text), actions && h('div', { class: 'row' }, actions));
+const tintOf = (id) => { let n = 0; for (const ch of String(id)) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return `tint-${(n % 6) + 1}`; };
 const miniEmpty = (iconName, text) => h('div', { class: 'mini-empty' }, icon(iconName, { size: 20 }), text);
 const rise = (el, i) => { if (el && !prefersReducedMotion()) { el.classList.add('rise'); el.style.setProperty('--i', String(i)); } return el; };
 const initials = (s) => (String(s || '').split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'A');
@@ -219,25 +220,12 @@ export function mountWorkspace({ data, email, actions }) {
     if (sum.errors.length) notes.push(h('p', { class: 'alert alert--warn' }, `${plural(sum.errors.length, 'investment', 'investments')} could not be calculated and ${sum.errors.length === 1 ? 'is' : 'are'} left out of these totals. Open ${sum.errors.length === 1 ? 'it' : 'each one'} under Investments to see why.`));
     if (ctx.store.problems().length) notes.push(h('p', { class: 'alert alert--warn' }, `${plural(ctx.store.problems().length, 'record', 'records')} could not be read on this device and ${ctx.store.problems().length === 1 ? 'is' : 'are'} being skipped.`));
 
-    // the statement: the memorable part of the dashboard
-    let full = false;
-    const hero = heroAmount();
-    const heroBtn = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': 'Value of what you hold today. Press to switch between short and full amount.' }, hero.el);
-    heroBtn.addEventListener('click', () => { full = !full; hero.paint(amtText(sum.valueKobo, { compact: !full })); });
-    if (!heroPlayed && !isHidden()) {
-      animateNumber({ set textContent(t) { hero.paint(t); } }, sum.valueKobo, { duration: 900, format: (n) => amtText(Math.round(n)) });
-    } else hero.paint(amtText(sum.valueKobo));
-    heroPlayed = true;
-    const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
-      h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
-      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
-      h('dl', { class: 'statement-line' },
-        stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
-        stat('Sold for', amt(sum.proceedsKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
-
-    // growth chart
-    let chartPanel = null;
-    if (tl.length > 1) {
+    // growth chart: lives inside the statement card, under the big number
+    const growth = (() => {
+      if (tl.length < 2) {
+        return h('div', { class: 'growth growth--ghost' }, ghostChart(),
+          h('p', { class: 'sub growth-note' }, 'Your growth chart draws itself as your investments build up history. It starts after your first month-end.'));
+      }
       const range = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Chart range' });
       const readout = h('p', { class: 'readout', 'aria-live': 'off' });
       const box = h('div', { class: 'chart-box' });
@@ -256,9 +244,26 @@ export function mountWorkspace({ data, email, actions }) {
       ranges.forEach(([label, m]) => range.append(h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => draw(m) }, label)));
       slideThumb(range);
       draw(null);
-      chartPanel = h('section', { class: 'panel' }, sectionHead('How it has grown', range), readout, box,
+      return h('div', { class: 'growth' }, h('div', { class: 'growth-head' }, readout, range), box,
         h('p', { class: 'legend-inline' }, h('span', {}, 'Worth, including investments sold'), h('span', { class: 'dashed' }, 'Money put in')));
-    }
+    })();
+
+    // the statement: the memorable part of the dashboard
+    let full = false;
+    const hero = heroAmount();
+    const heroBtn = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': 'Value of what you hold today. Press to switch between short and full amount.' }, hero.el);
+    heroBtn.addEventListener('click', () => { full = !full; hero.paint(amtText(sum.valueKobo, { compact: !full })); });
+    if (!heroPlayed && !isHidden()) {
+      animateNumber({ set textContent(t) { hero.paint(t); } }, sum.valueKobo, { duration: 900, format: (n) => amtText(Math.round(n)) });
+    } else hero.paint(amtText(sum.valueKobo));
+    heroPlayed = true;
+    const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
+      h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
+      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
+      growth,
+      h('dl', { class: 'statement-line' },
+        stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
+        stat('Sold for', amt(sum.proceedsKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
 
     // allocation by category
     const byCat = new Map();
@@ -296,9 +301,9 @@ export function mountWorkspace({ data, email, actions }) {
 
     const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes,
       h('div', { class: 'dash' },
-        h('div', { class: 'dash-main' }, rise(statement, 0), rise(chartPanel, 2)),
-        h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 3)),
-        h('div', { class: 'dash-wide' }, rise(recentPanel, 4))));
+        h('div', { class: 'dash-main' }, rise(statement, 0)),
+        h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 2)),
+        h('div', { class: 'dash-wide' }, rise(recentPanel, 3))));
     return out;
   }
 
@@ -319,11 +324,14 @@ export function mountWorkspace({ data, email, actions }) {
         if (filter === 'active' && closed) return false; if (filter === 'closed' && !closed) return false;
         return !q || `${it.investment.name} ${ctx.cat(it.investment.categoryId).name}`.toLowerCase().includes(q);
       });
+      const isClosed = (it) => !it.error && it.metrics.basis === 'realized';
+      const worth = (it) => (it.error ? -1 : Number(it.metrics.currentValueKobo));
+      shown.sort((x, y) => (isClosed(x) - isClosed(y)) || (worth(y) - worth(x))); // open ones first, biggest first
       const ul = shown.length ? h('ul', { class: 'rows' }, shown.map((it, n) => {
         const inv = it.investment, c = ctx.cat(inv.categoryId), m = it.metrics;
         const li = h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}` },
-          h('span', { class: 'tile' }, icon(c.icon)), // a photo can replace the icon here later
-          h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, inv.name),
+          h('span', { class: `tile ${tintOf(inv.categoryId)}` }, icon(c.icon)), // a photo can replace the icon here later
+          h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, inv.name, m?.basis === 'realized' && h('span', { class: 'chip' }, 'Closed')),
             h('div', { class: 'row-sub' }, m?.basis === 'realized' ? `${c.name}, closed ${fmtDate(inv.closedOn || m.asOf)}` : `${c.name}, since ${fmtMonthYear(inv.openedOn)}`)),
           it.error ? h('div', { class: 'row-end' }, h('span', { class: 'row-sub overdue' }, 'Cannot be calculated'))
             : h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi))));
@@ -338,7 +346,9 @@ export function mountWorkspace({ data, email, actions }) {
     slideThumb(seg);
     search.addEventListener('input', () => { query = search.value; draw(); });
     draw();
-    return h('div', { class: 'flow' }, head, h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), seg), h('div', { class: 'panel panel--flush' }, listBox));
+    const addCard = items.length <= 3 ? h('a', { class: 'add-card', href: '#/new' }, h('span', { class: 'add-card-plus' }, icon('plus')),
+      h('span', {}, h('strong', {}, 'Add another investment'), h('span', { class: 'sub' }, 'Land, rent, treasury bills, a car, a partnership and more.'))) : null;
+    return h('div', { class: 'flow' }, head, h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), seg), h('div', { class: 'panel panel--flush' }, listBox), addCard);
   }
 
   // ---------- Investment detail ----------
@@ -441,12 +451,18 @@ export function mountWorkspace({ data, email, actions }) {
     const profile = h('form', { class: 'stack', novalidate: true },
       h('div', { class: 'field' }, h('label', { for: 'displayName' }, 'Your name'), name),
       h('div', { class: 'field' }, h('label', { for: 'portfolioName' }, 'Portfolio name'), pname, h('p', { class: 'hint' }, 'Shown on your dashboard.')),
-      h('button', { class: 'btn', type: 'submit' }, 'Save'), saved);
+      h('button', { class: 'btn', type: 'submit', hidden: true }, 'Save changes'), saved);
+    const saveBtn = profile.querySelector('button[type=submit]');
+    let base = { n: settings.displayName || '', p: settings.portfolioName || '' };
+    const sync = () => { saveBtn.hidden = name.value === base.n && pname.value === base.p; if (!saveBtn.hidden) saved.textContent = ''; };
+    name.addEventListener('input', sync); pname.addEventListener('input', sync);
     profile.addEventListener('submit', async (e) => {
       e.preventDefault();
       await withBusy(profile.querySelector('button[type=submit]'), async () => {
         settings = await ctx.pf.updateSettings({ displayName: name.value, portfolioName: pname.value });
-        paintChrome('settings'); saved.textContent = 'Saved.';
+        paintChrome('settings');
+        base = { n: settings.displayName || '', p: settings.portfolioName || '' };
+        saveBtn.hidden = true; saved.textContent = 'Saved.';
       });
     });
 
@@ -483,9 +499,11 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'settings-col' },
           h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
             h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'),
-            h('p', { class: 'hint' }, 'Your records are saved on this device only for now. Syncing between devices arrives in a later update, so keep your recovery key safe.')))));
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'))),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('p', { class: 'sub' }, 'Your records are saved on this device only for now. Syncing between devices arrives in a later update, so keep your recovery key safe.'),
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'))),
+          h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Danger zone'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))))));
   }
 
   // ---------- routing ----------

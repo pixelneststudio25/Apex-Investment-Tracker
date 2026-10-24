@@ -57,10 +57,19 @@ export function lineChart({ points, description, onHover }) {
   return root;
 }
 
+// A calm placeholder for "no history yet": faint gridlines and a dashed line that is clearly not data.
+export function ghostChart() {
+  const W = 640, H = 200;
+  const root = svg('svg', { viewBox: `0 0 ${W} ${H}`, class: 'chart chart--ghost', 'aria-hidden': 'true', preserveAspectRatio: 'xMidYMid meet' });
+  for (const y of [30, 100, 170]) root.append(svg('line', { x1: 8, x2: W - 8, y1: y, y2: y, class: 'grid' }));
+  root.append(svg('path', { d: 'M8 150 C 120 148, 190 120, 290 112 S 470 70, 632 44', class: 'ghost-line' }), svg('circle', { cx: 632, cy: 44, r: 5, class: 'ghost-dot' }));
+  return root;
+}
+
 // segments: [{ label, valueKobo }]. Colours are seg-1 .. seg-6 in the stylesheet. Each segment sweeps in (CSS, driven by
 // custom properties set here). root.highlight(i | null) emphasises one segment and shows its value in the centre.
 export function donut({ segments, centre, description, formatValue = () => '' }) {
-  const S = 180, c = S / 2, r = 70, sw = 22, C = 2 * Math.PI * r, gap = segments.length > 1 ? 2.5 : 0;
+  const S = 180, c = S / 2, r = 72, sw = 18, C = 2 * Math.PI * r, gap = segments.length > 1 ? 3 : 0;
   const root = svg('svg', { viewBox: `0 0 ${S} ${S}`, class: 'donut', role: 'img', 'aria-label': description });
   root.append(svg('circle', { cx: c, cy: c, r, class: 'donut-track', 'stroke-width': sw, fill: 'none' }));
   const total = segments.reduce((t, s) => t + s.valueKobo, 0);
