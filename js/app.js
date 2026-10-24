@@ -123,7 +123,14 @@ async function showRecover(email, userId) {
   }));
 }
 
-const showCheckKey = () => show(checkKeyView({ onSubmit: (k) => auth.verifyRecoveryKey(k), onBack: showHome }));
+// A correct key is remembered on this device, so the setup checklist on Home can tick "Check your recovery key".
+const showCheckKey = () => show(checkKeyView({
+  onSubmit: async (k) => {
+    await auth.verifyRecoveryKey(k);
+    try { await (await vault.store()).meta.set('keyChecked', true); } catch { /* the checklist simply stays unticked */ }
+  },
+  onBack: showHome,
+}));
 
 function showHome() {
   show(mountWorkspace({
@@ -137,6 +144,7 @@ function showHome() {
       showCeremony(recoveryKey, async () => { await auth.commitRecoveryRotation(); showHome(); });
     },
     onSetPin: showSetPin,
+    hasPin: async () => { const r = await auth.pinInfo(); return !!r && r.userId === auth.state.userId; },
     onSignOut: async () => { idle.stop(); await vault.close(); await auth.signOut(); showWelcome(); },
     },
   }), { workspace: true });

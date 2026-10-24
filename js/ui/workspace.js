@@ -15,6 +15,7 @@ import { seedSamplePortfolio } from '../models/sample.js';
 import { StoreError } from '../core/store.js';
 import { wizardView } from './wizard.js';
 import { recordFormView } from './forms.js';
+import { isPaletteOpen, openPalette } from './palette.js';
 
 const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1] };
 const SOURCE = { own_estimate: 'your own estimate', agent: 'an agent', comparable_sale: 'a comparable sale', bank: 'a bank', other: 'another source' };
@@ -112,17 +113,24 @@ export function mountWorkspace({ data, email, actions }) {
   const moonIco = icon('moon'), sunIco = icon('sun');
   moonIco.classList.add('theme-ico', 'theme-ico--moon'); sunIco.classList.add('theme-ico', 'theme-ico--sun');
   const themeBtn = h('button', { class: 'icon-btn theme-toggle', type: 'button', 'aria-label': 'Switch between light and dark', title: 'Switch theme' }, moonIco, sunIco);
-  themeBtn.addEventListener('click', async () => {
-    await toggleTheme(themeBtn);
+  async function flipTheme(origin) {
+    await toggleTheme(origin);
     try { if (ctxCache) settings = await ctxCache.pf.updateSettings({ theme: currentTheme() }); } catch (e) { console.error(e); }
-  });
+  }
+  themeBtn.addEventListener('click', () => flipTheme(themeBtn));
+  // Search and commands (Ctrl+K). A button on phones and tablets, a wide search box in the desktop sidebar.
+  const isMac = /mac|iphone|ipad/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
+  const shortcut = isMac ? '⌘K' : 'Ctrl K';
+  const searchBtn = h('button', { class: 'icon-btn palette-btn', type: 'button', 'aria-label': 'Search and commands', title: `Search and commands (${shortcut})`, onclick: () => showPalette() }, icon('search'));
+  const sideSearch = h('button', { class: 'side-search', type: 'button', 'aria-label': `Search and commands, shortcut ${shortcut}`, onclick: () => showPalette() },
+    icon('search', { size: 18 }), h('span', { class: 'side-search-text' }, 'Search'), h('kbd', { 'aria-hidden': 'true' }, shortcut));
   const lockBtn = (cls) => h('button', { class: cls, type: 'button', 'aria-label': 'Lock Apex now', title: 'Lock now', onclick: actions.onLock }, icon('lock'));
   const topbar = h('header', { class: 'topbar' }, lockup(),
     h('div', { class: 'topbar-actions' },
       h('span', { class: 'chip-status', title: 'Your records are stored encrypted on this device. Syncing arrives in a later update.' }, 'Saved on this device'),
-      hideBtn, themeBtn, lockBtn('icon-btn')));
+      searchBtn, hideBtn, themeBtn, lockBtn('icon-btn')));
   root.append(
-    h('aside', { class: 'ws-side' }, lockup(), sideNav,
+    h('aside', { class: 'ws-side' }, lockup(), h('div', { class: 'side-top' }, sideSearch, sideNav),
       h('div', { class: 'side-user' }, avatar, h('div', { class: 'side-user-text' }, userName, userSub), lockBtn('icon-btn'))),
     h('main', { class: 'ws-main' }, topbar, outlet),
     tabbar);
@@ -207,13 +215,45 @@ export function mountWorkspace({ data, email, actions }) {
     text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
     actions: [addLink(), sampleButton(ctx)] });
 
+  // ---------- setup checklist (Home) ----------
+  // Every tick comes from what is actually on this device, never from a click, so it cannot say "done" falsely.
+  // The sample portfolio does not count: it is made up. "Hide" is remembered on this device.
+  async function setupCard(ctx, items) {
+    if (await ctx.store.meta.get('setupDismissed')) return null;
+    const sample = new Set(((await ctx.store.meta.get('sampleIds')) || {}).investments || []);
+    const mine = items.map((it) => it.investment).filter((i) => !sample.has(i.id)), ids = new Set(mine.map((i) => i.id));
+    const [vals, entries, scheds, pin, keyOk] = await Promise.all([ctx.store.list('valuation'), ctx.store.list('entry'), ctx.store.list('schedule'),
+      actions.hasPin ? actions.hasPin().catch(() => false) : false, ctx.store.meta.get('keyChecked')]);
+    const first = mine[0];
+    const link = (path, label) => first && h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${first.id}/${path}` }, label);
+    const steps = [
+      { title: 'Add your first investment', text: 'Land, rent, a treasury bill, a car, a partnership and more.', done: mine.length > 0, act: h('a', { class: 'btn btn--secondary btn--small', href: '#/new' }, 'Add one') },
+      { title: 'Record what it is worth today', text: 'A valuation you enter beats any assumption, so Apex shows a real figure.', done: vals.some((v) => ids.has(v.investmentId)), act: link('valuation', 'Add valuation') },
+      { title: 'Log income or a cost', text: 'Rent received, a service charge, a legal fee. It all feeds your returns.', done: entries.some((e) => ids.has(e.investmentId) && ['income', 'payout', 'cost'].includes(e.kind)) || scheds.some((x) => ids.has(x.investmentId)), act: link('entry', 'Add entry') },
+      { title: 'Set a PIN for quick unlocking', text: 'Four digits to unlock Apex on this device instead of your password.', done: !!pin, act: h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: actions.onSetPin }, 'Set PIN') },
+      { title: 'Check your recovery key', text: 'Confirms the key you saved really opens your data. It changes nothing.', done: !!keyOk, act: h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: actions.onCheckKey }, 'Check key') },
+    ];
+    const done = steps.filter((x) => x.done).length, all = done === steps.length;
+    const bar = h('div', { class: 'setup-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(done), 'aria-label': 'Setup progress' }, h('i', {}));
+    bar.style.setProperty('--p', String(done / steps.length));
+    const hide = h('button', { class: 'link-btn', type: 'button', onclick: async () => { await ctx.store.meta.set('setupDismissed', true); render(); } }, all ? 'Done' : 'Hide');
+    return h('section', { class: 'panel setup', 'aria-label': 'Getting started' },
+      h('div', { class: 'section-head setup-head' }, h('div', {}, h('h2', {}, all ? 'You are all set.' : 'Getting started'), h('p', { class: 'sub' }, all ? 'Everything on the list is done.' : `${done} of ${steps.length} done`)), hide),
+      bar,
+      h('ul', { class: 'setup-steps' }, steps.map((x) => h('li', { class: `setup-step${x.done ? ' is-done' : ''}` },
+        h('span', { class: 'setup-check', 'aria-hidden': 'true' }, x.done && icon('check', { size: 16 })),
+        h('div', { class: 'setup-text' }, h('p', { class: 'setup-title' }, x.title, x.done && h('span', { class: 'sr-only' }, ' (done)')), !x.done && h('p', { class: 'sub' }, x.text)),
+        !x.done && x.act))));
+  }
+
   // ---------- Home ----------
   async function homeView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
     const heading = h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`),
       settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName)), items.length ? addLink() : null);
-    if (!items.length) return h('div', { class: 'flow' }, heading, firstRun(ctx, 'home'));
+    const setup = await setupCard(ctx, items);
+    if (!items.length) return h('div', { class: 'flow' }, heading, firstRun(ctx, 'home'), rise(setup, 1));
     const [sum, tl, up, rec, sample] = await Promise.all([ctx.pf.summary(asOf, items), ctx.pf.timeline(asOf), ctx.pf.upcoming(asOf), ctx.pf.recent(6), sampleLive(ctx.store)]);
 
     const notes = [];
@@ -291,16 +331,16 @@ export function mountWorkspace({ data, email, actions }) {
         h('span', { class: `date-col${u.overdue ? ' overdue' : ''}` }, fmtDate(u.date)),
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, u.title), u.investmentName && h('div', { class: 'row-sub' }, u.investmentName)),
         u.amountKobo != null && h('div', { class: 'row-end' }, signed(u.kind === 'cost' ? -u.amountKobo : u.amountKobo), h('span', { class: 'row-sub' }, 'expected'))))))
-        : miniEmpty('calendar', 'Nothing expected in the next 45 days.'));
+        : miniEmpty('calendar', 'Nothing expected in the next 45 days. Rent, costs and reminders you set up will show here.'));
 
     // recent activity
     const recentPanel = h('section', { class: 'panel' }, sectionHead('Recent activity'),
       rec.length ? h('ul', { class: 'rows' }, rec.map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${e.investmentId}` },
         h('span', { class: 'date-col' }, fmtDate(e.date)),
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), h('div', { class: 'row-sub' }, e.investmentName)),
-        h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : miniEmpty('list', 'Nothing recorded yet.'));
+        h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : miniEmpty('list', 'No activity yet. Entries you add show up here.'));
 
-    const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes,
+    const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes, rise(setup, 0),
       h('div', { class: 'dash' },
         h('div', { class: 'dash-main' }, rise(statement, 0)),
         h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 2)),
@@ -318,6 +358,12 @@ export function mountWorkspace({ data, email, actions }) {
     const listBox = h('div', {});
     const seg = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Filter' });
     const search = h('input', { class: 'input', type: 'search', placeholder: 'Search by name or category', 'aria-label': 'Search investments' });
+    const clear = () => { filter = 'all'; query = ''; search.value = ''; draw(); };
+    const noMatch = () => {
+      const q = query.trim();
+      const text = q ? `No investments match “${q}”.` : filter === 'closed' ? 'None of your investments are closed yet.' : 'No active investments right now.';
+      return h('div', { class: 'mini-empty mini-empty--action' }, icon('search', { size: 20 }), h('span', {}, text), h('button', { class: 'link-btn', type: 'button', onclick: clear }, 'Show everything'));
+    };
     const draw = () => {
       const q = query.trim().toLowerCase();
       const shown = items.filter((it) => {
@@ -338,7 +384,7 @@ export function mountWorkspace({ data, email, actions }) {
             : h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi))));
         if (first) rise(li, Math.min(n, 8) * 0.6);
         return li;
-      })) : miniEmpty('search', 'No investments match.');
+      })) : noMatch();
       listBox.replaceChildren(ul);
       first = false;
       [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
@@ -406,8 +452,9 @@ export function mountWorkspace({ data, email, actions }) {
       working);
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
       h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
-      h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : h('p', { class: 'sub' }, 'No entries yet.'),
-      h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Amounts show money leaving you as minus and money reaching you as plus. Tap an entry to edit or delete it.`));
+      h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : emptyBlock({ iconName: 'list', title: 'Nothing in the ledger yet', text: closed ? 'This investment is closed, so there is nothing to add. Reopen it if you need to record more.' : 'Every payment into or out of this investment is listed here, newest first. Add the first one to get started.',
+        actions: !closed && h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry') }),
+      b.entries.length > 0 && h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Money leaving you shows as minus and money reaching you as plus. Open an entry to edit or delete it.`));
     panels.people = () => {
       const name = (pid) => (pid === 'me' ? 'You' : b.partners.find((p) => p.id === pid)?.name || 'Partner');
       const mine = partners.partners.find((p) => p.partnerId === 'me');
@@ -507,6 +554,45 @@ export function mountWorkspace({ data, email, actions }) {
             h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))))));
   }
 
+  // ---------- search and commands (Ctrl+K) ----------
+  async function toggleHide() {
+    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
+  }
+  async function paletteItems() {
+    const ctx = ctxCache || await load();
+    const [invs, dismissed] = await Promise.all([ctx.pf.investments(), ctx.store.meta.get('setupDismissed')]);
+    const dark = currentTheme() === 'dark', hidden = !!settings?.hideAmounts;
+    const cmd = (group, label, ic, run, keywords = '', sub = '') => ({ group, label, icon: ic, run, keywords, sub });
+    const list = [
+      cmd('Actions', 'Add an investment', 'plus', () => go('#/new'), 'new create buy record'),
+      cmd('Actions', hidden ? 'Show amounts' : 'Hide amounts', hidden ? 'eye' : 'eyeOff', toggleHide, 'privacy blur money balance'),
+      cmd('Actions', dark ? 'Switch to the light theme' : 'Switch to the dark theme', dark ? 'sun' : 'moon', () => flipTheme(themeBtn), 'appearance mode night day'),
+      cmd('Actions', 'Lock Apex now', 'lock', actions.onLock, 'secure'),
+      cmd('Actions', 'Set or change PIN', 'key', actions.onSetPin, 'passcode unlock'),
+      cmd('Actions', 'Check my recovery key', 'shield', actions.onCheckKey, 'backup'),
+      dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render(); else go('#/'); }, 'getting started onboarding'),
+      cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
+      cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
+      cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
+    ].filter(Boolean);
+    const closedOf = (i) => i.status === 'closed';
+    for (const inv of [...invs].sort((a, b) => (closedOf(a) - closedOf(b)) || a.name.localeCompare(b.name))) {
+      const c = ctx.cat(inv.categoryId);
+      list.push({ group: 'Investments', label: inv.name, sub: `${c.name}${closedOf(inv) ? ', closed' : ''}`, icon: c.icon, keywords: c.name, run: () => go(`#/investments/${inv.id}`) });
+    }
+    return list;
+  }
+  function showPalette() {
+    if (root.classList.contains('is-focus')) return; // in the middle of a form: do not jump away from it
+    if (!isPaletteOpen() && document.documentElement.classList.contains('dialog-open')) return;
+    openPalette({ load: paletteItems, isAlive: () => root.isConnected });
+  }
+  const keyHandler = (e) => {
+    if (!root.isConnected) { document.removeEventListener('keydown', keyHandler); return; }
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === 'k') { e.preventDefault(); showPalette(); }
+  };
+  document.addEventListener('keydown', keyHandler);
+
   // ---------- routing ----------
   async function render() {
     const mine = ++token;
@@ -543,9 +629,7 @@ export function mountWorkspace({ data, email, actions }) {
       if (mine === token) outlet.removeAttribute('aria-busy');
     }
   }
-  hideBtn.addEventListener('click', async () => {
-    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
-  });
+  hideBtn.addEventListener('click', toggleHide);
   hashHandler = () => { if (!root.isConnected) { window.removeEventListener('hashchange', hashHandler); return; } render(); };
   window.addEventListener('hashchange', hashHandler);
   if (!location.hash.startsWith('#/')) history.replaceState(null, '', '#/');

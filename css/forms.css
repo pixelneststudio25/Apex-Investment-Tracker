@@ -37,7 +37,9 @@ select.input { -webkit-appearance: none; appearance: none; padding-right: 2.6rem
 .choice-desc { color: var(--text-muted); font-size: var(--fs-small); }
 
 /* category grid */
-.cat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
+/* Phones: one full-width chip per line, so long category names read in full.
+   From 640px up it is the three-column grid again. */
+.cat-grid { display: grid; grid-template-columns: 1fr; gap: var(--space-3); }
 @media (min-width: 640px) { .cat-grid { grid-template-columns: repeat(3, 1fr); } }
 .cat { display: flex; align-items: center; gap: var(--space-3); text-align: left; min-height: 64px; padding: var(--space-3); border-radius: var(--radius-card); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: 500 var(--fs-small) var(--font-sans); cursor: pointer; transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring); touch-action: manipulation; }
 @media (hover: hover) { .cat:hover { background: var(--surface-2); } }
