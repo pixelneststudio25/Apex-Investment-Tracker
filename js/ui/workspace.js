@@ -36,6 +36,8 @@ let heroPlayed = false; // the dashboard figure counts up once per visit, not on
 const amt = (kobo, opts) => h('span', { class: 'amt' }, amtText(kobo, opts)); // blurs when amounts are hidden
 const pill = (net, roi, small) => {
   const t = tone(net);
+  // Nothing gained or lost yet (a brand-new investment): one calm phrase instead of "₦0.00 0.00%".
+  if (t === 'flat') return h('span', { class: `pill flat${small ? ' pill--small' : ''}` }, 'No change yet');
   return h('span', { class: `pill ${t}${small ? ' pill--small' : ''}` }, t === 'gain' && icon('arrowUp'), t === 'loss' && icon('arrowDown'), amt(net, { sign: true }), roi != null && ` ${pct(roi, { sign: true })}`);
 };
 const pillPct = (net, roi) => { const t = tone(net); return h('span', { class: `pill pill--small ${t}` }, t === 'gain' && icon('arrowUp'), t === 'loss' && icon('arrowDown'), pct(roi, { sign: true })); };
@@ -367,7 +369,7 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', {}, h('h1', { class: 'page-title' }, inv.name), h('p', { class: 'sub' }, `${c.name}, ${closed ? 'closed' : 'active'} since ${fmtMonthYear(inv.openedOn)}`))),
       h('p', { class: 'statement-label' }, closed ? 'Sold for' : 'Worth today'), heroValue,
       h('p', { class: 'sub' }, basisText),
-      h('p', { class: 'sub statement-sub' }, pill(m.netGainKobo, m.roi), ' net gain, counting income and costs'),
+      h('p', { class: 'sub statement-sub' }, pill(m.netGainKobo, m.roi), ' in total, counting income and costs'),
       h('dl', { class: 'statement-line' }, stat('Invested', amt(m.investedKobo)), stat('Costs', amt(m.costsKobo)), stat('Income received', amt(m.incomeKobo)), stat('Held for', plural(m.daysHeld, 'day', 'days'))));
 
     const returns = h('dl', { class: 'defs' },

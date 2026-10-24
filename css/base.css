@@ -1,6 +1,6 @@
 /* Base elements, page shell, buttons, brand lockup, theme toggle icon. Tokens come from tokens.css. */
 *, *::before, *::after { box-sizing: border-box; }
-html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; scrollbar-color: var(--border-strong) transparent; }
+html { scrollbar-gutter: stable; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; scrollbar-color: var(--border-strong) transparent; }
 [hidden] { display: none !important; }
 
 body {
@@ -25,7 +25,7 @@ h2 { font-size: var(--fs-h2); line-height: 1.25; }
 .shell { max-width: 40rem; margin: 0 auto; padding: var(--space-6) var(--space-4); }
 .num { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .muted { color: var(--text-muted); }
-.hero-value { font: 500 var(--fs-display)/var(--lh-display) var(--font-serif); letter-spacing: -0.02em; margin: 0; }
+.hero-value { font: 500 var(--fs-hero)/var(--lh-hero) var(--font-serif); letter-spacing: -0.02em; margin: 0; }
 .gain { color: var(--positive); }
 .loss { color: var(--negative); }
 .gold-rule { border: 0; height: 2px; border-radius: 2px; background: var(--accent); margin: var(--space-3) 0 var(--space-6); width: 3rem; }

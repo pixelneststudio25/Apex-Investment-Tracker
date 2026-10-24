@@ -17,8 +17,8 @@
   --focus-ring: #0F5C45;
   --shimmer: rgba(255, 255, 255, 0.65); --overlay: rgba(20, 24, 27, 0.45);
 
-  /* Legacy names still used by css not yet redesigned. Remove once every phase has shipped. */
-  --gold: var(--accent); --gold-bright: var(--accent); --on-gold: var(--on-accent);
+  /* Chart and allocation colours (light values; dark values below) */
+  --chart-1: #0F5C45; --chart-2: #3C6FB5; --chart-3: #B9892B; --chart-4: #8A5FA8; --chart-5: #C4623D; --chart-6: #6B7A74;
 
   /* ---- Type ---- */
   --font-serif: "Newsreader", "Iowan Old Style", Georgia, "Times New Roman", serif;
@@ -29,11 +29,13 @@
   --lh-display: calc(3rem * var(--text-scale));
   --fs-h1: calc(2rem * var(--text-scale));
   --fs-h2: calc(1.5rem * var(--text-scale));
-  --fs-h3: calc(1.125rem * var(--text-scale));
+  --fs-h3: calc(1.25rem * var(--text-scale));
   --fs-body: calc(1rem * var(--text-scale));
-  --fs-small: calc(0.875rem * var(--text-scale));
-  --fs-caption: calc(0.75rem * var(--text-scale));
-  --fs-numeric: calc(0.9375rem * var(--text-scale));
+  --fs-small: calc(0.9375rem * var(--text-scale));   /* 15px: labels, hints, buttons */
+  --fs-caption: calc(0.8125rem * var(--text-scale)); /* 13px: the smallest text anywhere */
+  --fs-numeric: calc(1rem * var(--text-scale));
+  --fs-hero: calc(3.25rem * var(--text-scale));      /* the big balance */
+  --lh-hero: calc(3.5rem * var(--text-scale));
 
   /* ---- Space (4px base) ---- */
   --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem; --space-4: 1rem;
@@ -59,7 +61,10 @@
 }
 
 @media (min-width: 1024px) {
-  :root { --fs-display: calc(3.75rem * var(--text-scale)); --lh-display: calc(4rem * var(--text-scale)); }
+  :root {
+    --fs-display: calc(3.75rem * var(--text-scale)); --lh-display: calc(4rem * var(--text-scale));
+    --fs-hero: calc(4.75rem * var(--text-scale)); --lh-hero: calc(5rem * var(--text-scale));
+  }
 }
 
 /* ---- Which scheme is active ---- */
@@ -95,6 +100,8 @@
     --shadow-2: 0 8px 24px light-dark(rgba(20, 24, 27, 0.09), rgba(0, 0, 0, 0.45)), 0 2px 6px light-dark(rgba(20, 24, 27, 0.04), transparent);
     --shadow-3: 0 18px 48px light-dark(rgba(20, 24, 27, 0.16), rgba(0, 0, 0, 0.6));
     --card-highlight: inset 0 1px 0 light-dark(rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.04));
+    --chart-1: light-dark(#0F5C45, #58B8A0); --chart-2: light-dark(#3C6FB5, #7DA7E8); --chart-3: light-dark(#B9892B, #E0B65A);
+    --chart-4: light-dark(#8A5FA8, #B58CE0); --chart-5: light-dark(#C4623D, #E39B6A); --chart-6: light-dark(#6B7A74, #8FA0A0);
   }
 }
 
@@ -109,6 +116,7 @@
       --shimmer: rgba(255, 255, 255, 0.07); --overlay: rgba(0, 0, 0, 0.6);
       --shadow-1: 0 0 0 0 transparent; --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45); --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
       --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      --chart-1: #58B8A0; --chart-2: #7DA7E8; --chart-3: #E0B65A; --chart-4: #B58CE0; --chart-5: #E39B6A; --chart-6: #8FA0A0;
     }
   }
   :root[data-theme="dark"] {
@@ -119,16 +127,7 @@
     --shimmer: rgba(255, 255, 255, 0.07); --overlay: rgba(0, 0, 0, 0.6);
     --shadow-1: 0 0 0 0 transparent; --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.45); --shadow-3: 0 18px 48px rgba(0, 0, 0, 0.6);
     --card-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
-}
-
-/* ---- TEMPORARY: chart colours. workspace.css still declares the old gold palette (three times).
-   This higher-specificity block wins until workspace.css is replaced in Phase 3, then it moves there. ---- */
-:root:root:root { --chart-1: #0F5C45; --chart-2: #3C6FB5; --chart-3: #B9892B; --chart-4: #8A5FA8; --chart-5: #C4623D; --chart-6: #6B7A74; }
-@supports (color: light-dark(#000, #fff)) {
-  :root:root:root {
-    --chart-1: light-dark(#0F5C45, #58B8A0); --chart-2: light-dark(#3C6FB5, #7DA7E8); --chart-3: light-dark(#B9892B, #E0B65A);
-    --chart-4: light-dark(#8A5FA8, #B58CE0); --chart-5: light-dark(#C4623D, #E39B6A); --chart-6: light-dark(#6B7A74, #8FA0A0);
+    --chart-1: #58B8A0; --chart-2: #7DA7E8; --chart-3: #E0B65A; --chart-4: #B58CE0; --chart-5: #E39B6A; --chart-6: #8FA0A0;
   }
 }
 
