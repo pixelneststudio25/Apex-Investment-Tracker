@@ -1,12 +1,34 @@
-// Joins stored records to the calculation engine. The screens (Phase 4) ask this module for ready-made
-// numbers; the engine stays pure and knows nothing about storage.
+// Joins stored records to the calculation engine. The screens ask this module for ready-made numbers;
+// the engine stays pure and knows nothing about storage.
 //
 // Deleting an investment hides it AND everything that belongs to it, without touching the child records
 // (no cascade writes). Restoring the investment brings everything back exactly as it was.
-import { investmentMetrics, partnerShares } from '../engine/index.js';
+import { addDays, investmentMetrics, partnerShares, scheduleEntries } from '../engine/index.js';
 import { StoreError } from '../core/store.js';
 
 const byDate = (a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1);
+// 'me' first, then by start date: screens and tests never depend on storage order.
+const byOwner = (a, b) => (a.partnerId === 'me' ? -1 : b.partnerId === 'me' ? 1 : (a.effectiveFrom || '') < (b.effectiveFrom || '') ? -1 : (a.effectiveFrom || '') > (b.effectiveFrom || '') ? 1 : a.createdAt < b.createdAt ? -1 : 1);
+
+const pad = (n) => String(n).padStart(2, '0');
+// Month-end dates from the month of `from` up to `to` (the last point is `to` itself).
+export function monthEnds(from, to) {
+  const [fy, fm] = from.split('-').map(Number), [ty, tm] = to.split('-').map(Number);
+  const out = [];
+  let y = fy, m = fm - 1;
+  while (y < ty || (y === ty && m < tm - 1)) {
+    out.push(`${y}-${pad(m + 1)}-${pad(new Date(Date.UTC(y, m + 1, 0)).getUTCDate())}`);
+    if (++m > 11) { m = 0; y++; }
+  }
+  out.push(to);
+  return out;
+}
+const thin = (arr, max) => {
+  if (arr.length <= max) return arr;
+  const step = Math.ceil(arr.length / max), out = arr.filter((_, i) => i % step === 0);
+  if (out[out.length - 1] !== arr[arr.length - 1]) out.push(arr[arr.length - 1]);
+  return out;
+};
 
 export function createPortfolio(store) {
   const children = async (type, investmentId) => (await store.list(type)).filter((r) => r.investmentId === investmentId);
@@ -25,33 +47,92 @@ export function createPortfolio(store) {
       children('ownership', investmentId), children('document', investmentId), children('reminder', investmentId),
       store.list('partner'),
     ]);
-    return { investment, entries: entries.sort(byDate), valuations: valuations.sort(byDate), schedules, ownership, documents, reminders, partners };
+    return { investment, entries: entries.sort(byDate), valuations: valuations.sort(byDate), schedules, ownership: ownership.sort(byOwner), documents, reminders, partners };
   }
+
+  const calc = (b, asOf, rateTypes = null) => investmentMetrics({ investment: b.investment, entries: b.entries, valuations: b.valuations, asOf, rateTypes });
 
   async function metrics(investmentId, asOf, { rateTypes = null } = {}) {
     const b = await bundle(investmentId);
     if (!b) throw new StoreError('NOT_FOUND', 'Investment not found.');
-    const m = investmentMetrics({ investment: b.investment, entries: b.entries, valuations: b.valuations, asOf, rateTypes });
+    const m = calc(b, asOf, rateTypes);
     const shared = b.investment.behaviors.ownership === 'shared' && b.ownership.length > 0;
     const partners = shared ? partnerShares({ ownership: b.ownership, entries: b.entries, totalValueKobo: m.totalValueKobo, netGainKobo: m.netGainKobo, asOf }) : null;
     return { bundle: b, metrics: m, partners };
   }
 
-  // Portfolio totals across live investments. One investment that cannot be calculated (for example two
-  // overlapping rates) is left out of the totals and listed in `errors`; it never blocks the dashboard.
-  async function summary(asOf) {
+  // One row per live investment with its figures. An investment that cannot be calculated (for example two
+  // overlapping rates in old data) has `error` instead of `metrics`; it never blocks the others.
+  async function overview(asOf) {
+    const items = [];
+    for (const investment of await investments()) {
+      try { items.push({ investment, metrics: (await metrics(investment.id, asOf)).metrics }); }
+      catch (e) { items.push({ investment, error: { code: e.code || 'ERROR', message: e.message } }); }
+    }
+    return items;
+  }
+
+  // Portfolio totals across live investments; broken ones are left out of the totals and listed in `errors`.
+  async function summary(asOf, items) {
+    items ||= await overview(asOf);
     const total = { investedKobo: 0, costsKobo: 0, incomeKobo: 0, proceedsKobo: 0, valueKobo: 0, totalValueKobo: 0, netGainKobo: 0 };
     const count = { active: 0, closed: 0 }, errors = [];
-    for (const inv of await investments()) {
-      try {
-        const { metrics: m } = await metrics(inv.id, asOf);
-        for (const k of Object.keys(total)) total[k] += m[k];
-        count[m.basis === 'realized' ? 'closed' : 'active']++;
-      } catch (e) { errors.push({ investmentId: inv.id, code: e.code || 'ERROR', message: e.message }); }
+    for (const it of items) {
+      if (it.error) { errors.push({ investmentId: it.investment.id, ...it.error }); continue; }
+      for (const k of Object.keys(total)) total[k] += it.metrics[k];
+      count[it.metrics.basis === 'realized' ? 'closed' : 'active']++;
     }
     for (const v of Object.values(total)) if (!Number.isSafeInteger(v)) throw new StoreError('OVERFLOW', 'Portfolio total is too large to calculate.');
     const basis = total.investedKobo + total.costsKobo;
     return { asOf, ...total, roi: basis === 0 ? null : total.netGainKobo / basis, count, errors };
+  }
+
+  // Month-end history of the whole portfolio for the dashboard chart: value including investments already
+  // sold (so a maturity never looks like a drop), against money put in (invested plus costs).
+  async function timeline(asOf, { maxPoints = 72 } = {}) {
+    const bundles = [];
+    for (const inv of await investments()) { const b = await bundle(inv.id); if (b) bundles.push(b); }
+    if (!bundles.length) return [];
+    const start = bundles.map((b) => b.investment.openedOn).sort()[0];
+    if (start > asOf) return [];
+    return thin(monthEnds(start, asOf), maxPoints).map((date) => {
+      let valueKobo = 0, putInKobo = 0;
+      for (const b of bundles) {
+        if (b.investment.openedOn > date) continue;
+        try { const m = calc(b, date); valueKobo += m.totalValueKobo; putInKobo += m.investedKobo + m.costsKobo; } catch { /* left out, like in the summary */ }
+      }
+      return { date, valueKobo, putInKobo };
+    });
+  }
+
+  // What is coming up: expected scheduled income and costs that have not been recorded yet, plus reminders.
+  async function upcoming(asOf, { days = 45 } = {}) {
+    const end = addDays(asOf, days), items = [];
+    const live = new Map((await investments()).map((i) => [i.id, i]));
+    const entries = await store.list('entry');
+    for (const s of await store.list('schedule')) {
+      const inv = live.get(s.investmentId);
+      if (!inv || inv.status === 'closed' || s.status !== 'active') continue;
+      for (const e of scheduleEntries(s, end)) {
+        if (e.date <= asOf || entries.some((x) => x.linkedScheduleId === s.id && x.date === e.date)) continue;
+        items.push({ date: e.date, kind: s.kind, title: s.label || (s.kind === 'income' ? 'Income expected' : 'Cost expected'), investmentId: inv.id, investmentName: inv.name, amountKobo: e.amountKobo });
+      }
+    }
+    for (const r of await store.list('reminder')) {
+      const inv = r.investmentId ? live.get(r.investmentId) : null;
+      if (r.done || (r.investmentId && !inv) || r.dueDate > end) continue;
+      items.push({ date: r.dueDate, kind: 'reminder', title: r.text, investmentId: inv?.id || null, investmentName: inv?.name || null, overdue: r.dueDate < asOf });
+    }
+    // Same day: money first, then reminders.
+    return items.sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : (a.kind === 'reminder') !== (b.kind === 'reminder') ? (a.kind === 'reminder' ? 1 : -1) : a.title < b.title ? -1 : 1));
+  }
+
+  // The latest entries across live investments, newest first.
+  async function recent(limit = 8) {
+    const live = new Map((await investments()).map((i) => [i.id, i]));
+    return (await store.list('entry')).filter((e) => live.has(e.investmentId))
+      .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1))
+      .slice(0, limit).map((e) => ({ ...e, investmentName: live.get(e.investmentId).name }));
   }
 
   // The settings record is a singleton. If two devices both created one before syncing, the newest wins.
@@ -61,5 +142,5 @@ export function createPortfolio(store) {
   }
   async function updateSettings(change) { const s = await settings(); return store.update(s.id, change); }
 
-  return { investments, bundle, metrics, summary, settings, updateSettings };
+  return { investments, bundle, metrics, overview, summary, timeline, upcoming, recent, settings, updateSettings };
 }

@@ -162,6 +162,19 @@ test('formatting: full, signed, compact and percent', () => {
   eq(formatPercent(0.1116, { sign: true }), '+11.16%'); eq(formatPercent(-0.024), '−2.40%'); eq(formatPercent(null), 'n/a'); eq(formatPercent(0.00001, { sign: true }), '0.00%');
 });
 
+test('closed investments viewed BEFORE the closing date are still open then (value grown, no proceeds); status alone means closed always', () => {
+  const investment = { status: 'closed', closedOn: '2026-05-31', openedOn: '2025-06-01', behaviors: { valueChange: 'interest' },
+    rates: [{ type: 'agreed', rate: 0.185, method: 'simple', effectiveFrom: '2025-06-01' }] };
+  const entries = [{ date: '2025-06-01', kind: 'capital_in', amountKobo: N(5000000) }, { date: '2026-05-31', kind: 'proceeds', amountKobo: 592246575 }];
+  const before = investmentMetrics({ investment, entries, asOf: '2025-12-01' });
+  eq(before.basis, 'unrealized'); eq(before.proceedsKobo, 0); eq(before.valueSource, 'assumed');
+  if (!(before.valueKobo > N(5000000) && before.netGainKobo > 0)) throw new Error('should show accrued value, not a total loss');
+  const after = investmentMetrics({ investment, entries, asOf: '2026-05-31' });
+  eq(after.basis, 'realized'); eq(after.valueKobo, 0); eq(after.proceedsKobo, 592246575);
+  const noDate = investmentMetrics({ investment: { status: 'closed' }, entries: [entries[0], { ...entries[1], date: '2026-05-31' }], asOf: '2026-12-31' });
+  eq(noDate.basis, 'realized');
+});
+
 export async function runEngineTests(log = console.log) {
   let passed = 0, failed = 0;
   for (const t of tests) {

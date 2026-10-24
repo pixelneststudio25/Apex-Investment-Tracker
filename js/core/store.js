@@ -22,6 +22,9 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
   const cache = new Map();  // id -> { version, obj }; plaintext, in memory only, cleared when the key changes
   const problems = new Map(); // id -> code, for records that could not be read
   let cacheKey = null;
+  let lastStamp = '';
+  // Strictly increasing creation times, so records made within the same millisecond keep their order.
+  const stamp = () => { let t = now(); if (t <= lastStamp) t = new Date(Date.parse(lastStamp) + 1).toISOString(); lastStamp = t; return t; };
   let chain = Promise.resolve();
   const serial = (fn) => { const run = chain.then(() => fn()); chain = run.catch(() => {}); return run; };
 
@@ -93,7 +96,7 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
       return serial(async () => {
         const k = key();
         const fields = validate(type, data);
-        const ts = now();
+        const ts = stamp();
         const obj = { type, schemaVersion: RECORD_SCHEMA_VERSION, createdAt: ts, updatedAt: ts, deletedAt: null, ...fields };
         const payload = await encryptRecord(k, userId, id, obj);
         try {

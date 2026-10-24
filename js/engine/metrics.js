@@ -18,7 +18,9 @@ export function investmentMetrics({ investment = {}, entries = [], valuations = 
   const of = (...kinds) => live.filter((e) => kinds.includes(e.kind));
   const capital = of('capital_in').sort((a, b) => compareDates(a.date, b.date));
   const investedKobo = sum(capital), costsKobo = sum(of('cost')), incomeKobo = sum(of('income', 'payout')), proceedsKobo = sum(of('proceeds'));
-  const closed = investment.status === 'closed' || (investment.closedOn && compareDates(investment.closedOn, asOf) <= 0);
+  // With a closing date, the date decides (so a past date shows the investment as it was while still open);
+  // a closed status with no closing date is closed on every date.
+  const closed = investment.closedOn ? compareDates(investment.closedOn, asOf) <= 0 : investment.status === 'closed';
 
   let valueKobo = 0, valueSource = 'proceeds', valuationDate = null;
   if (!closed) {
