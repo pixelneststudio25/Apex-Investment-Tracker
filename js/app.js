@@ -2,8 +2,10 @@ import { createAuth } from './core/auth.js';
 import { createIdleLock } from './core/idle.js';
 import { kv } from './core/kv.js';
 import { createSupabase } from './core/supabase.js';
-import { ceremonyView, checkKeyView, forgotView, homeView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
+import { createVault } from './core/vault.js';
+import { ceremonyView, checkKeyView, forgotView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
 import { pinSetupView, pinUnlockView } from './ui/pin-views.js';
+import { mountWorkspace } from './ui/workspace.js';
 
 // Read the link parameters before the Supabase client consumes and clears them.
 const linkParams = new URLSearchParams(location.hash.slice(1));
@@ -19,11 +21,16 @@ document.getElementById('theme-toggle')?.addEventListener('click', () => {
 });
 
 const app = document.getElementById('app');
-const show = (node) => { app.replaceChildren(node); window.scrollTo(0, 0); };
+// The signed-in workspace has its own navigation, so the plain page header is hidden while it is showing.
+const show = (node, { workspace = false } = {}) => {
+  document.body.classList.toggle('is-workspace', workspace);
+  app.replaceChildren(node); window.scrollTo(0, 0);
+};
 
-let auth;
+let auth, vault;
 try {
   auth = createAuth({ supabase: createSupabase(), kv, redirectTo: location.origin + '/' });
+  vault = createVault({ auth });
 } catch {
   app.textContent = 'Apex could not start. Please reload the page.';
   throw new Error('init failed');
@@ -43,7 +50,9 @@ async function afterUnlock() { // after password login or recovery
 }
 
 async function lockNow() {
-  idle.stop(); auth.lock(); await showLocked();
+  idle.stop(); auth.lock();
+  await vault.close(); // decrypted records leave memory right away
+  await showLocked();
 }
 
 async function showLocked(notice) {
@@ -118,8 +127,10 @@ async function showRecover(email, userId) {
 const showCheckKey = () => show(checkKeyView({ onSubmit: (k) => auth.verifyRecoveryKey(k), onBack: showHome }));
 
 function showHome() {
-  show(homeView({
+  show(mountWorkspace({
+    data: vault,
     email: auth.state.email,
+    actions: {
     onLock: lockNow,
     onCheckKey: showCheckKey,
     onRotateKey: async () => {
@@ -127,8 +138,9 @@ function showHome() {
       showCeremony(recoveryKey, async () => { await auth.commitRecoveryRotation(); showHome(); });
     },
     onSetPin: showSetPin,
-    onSignOut: async () => { idle.stop(); await auth.signOut(); showWelcome(); },
-  }));
+    onSignOut: async () => { idle.stop(); await vault.close(); await auth.signOut(); showWelcome(); },
+    },
+  }), { workspace: true });
 }
 
 (async function boot() {
