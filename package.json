@@ -1,6 +1,0 @@
-{
-  "name": "apex",
-  "private": true,
-  "type": "module",
-  "scripts": { "test": "node tests/run-node.mjs" }
-}
