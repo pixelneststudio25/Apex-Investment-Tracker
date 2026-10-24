@@ -7,9 +7,11 @@ import { donut, lineChart, segmentClass } from './charts.js';
 import { fmtDate, fmtMonthYear, greeting, money, pct, setHidden, todayISO, tone } from './fmt.js';
 import { addMonths } from '../engine/index.js';
 import { createPortfolio } from '../models/portfolio.js';
-import { findTemplate } from '../models/templates.js';
+import { BUILT_IN_TEMPLATES, findTemplate } from '../models/templates.js';
 import { seedSamplePortfolio } from '../models/sample.js';
 import { StoreError } from '../core/store.js';
+import { wizardView } from './wizard.js';
+import { recordFormView } from './forms.js';
 
 const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1] };
 const SOURCE = { own_estimate: 'your own estimate', agent: 'an agent', comparable_sale: 'a comparable sale', bank: 'a bank', other: 'another source' };
@@ -17,6 +19,8 @@ const VALUE_CHANGE = { none: 'No change in value', appreciation: 'Grows in value
 const pctShort = (f) => pct(f).replace(/\.?0+%$/, '%');
 const every = (n) => ({ 1: 'yearly', 2: 'half-yearly', 4: 'quarterly', 12: 'monthly', 365: 'daily' }[n] || (n ? `${n} times a year` : 'yearly'));
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+const addLink = () => h('a', { class: 'btn btn--small', href: '#/new' }, icon('plus'), 'Add investment');
+const go = (hash) => { location.hash = hash; };
 
 function rateSentence(inv, r) {
   const what = r.rate < 0 || inv.behaviors.valueChange === 'depreciation' ? 'depreciation' : inv.behaviors.valueChange === 'interest' ? 'interest' : 'growth';
@@ -73,9 +77,10 @@ export function mountWorkspace({ data, email, actions }) {
     document.documentElement.style.setProperty('--text-scale', String((settings.textScale || 100) / 100));
     setHidden(settings.hideAmounts);
   }
-  function toast(text) {
-    const t = h('div', { class: 'toast', role: 'status' }, text);
-    root.append(t); setTimeout(() => t.remove(), 3800);
+  function toast(text, action) {
+    const t = h('div', { class: 'toast', role: 'status' }, text,
+      action && h('button', { class: 'link-btn toast-btn', type: 'button', onclick: () => { t.remove(); action.run(); } }, action.label));
+    root.append(t); setTimeout(() => t.remove(), action ? 9000 : 3800);
   }
 
   // ---------- data ----------
@@ -107,11 +112,26 @@ export function mountWorkspace({ data, email, actions }) {
     toast('Sample portfolio removed.');
     render();
   }
+  async function reopen(ctx, id) {
+    await ctx.store.update(id, { status: 'active', closedOn: null });
+    toast('Reopened. Any sale proceeds you recorded are still in the ledger. Delete them there if they no longer apply.');
+    render();
+  }
+  async function deleteInvestment(ctx, inv) {
+    if (!window.confirm(`Delete "${inv.name}"? It and everything recorded under it will be hidden. You can undo right after.`)) return;
+    await ctx.store.remove(inv.id);
+    toast(`"${inv.name}" deleted.`, { label: 'Undo', run: async () => { await ctx.store.restore(inv.id); render(); } });
+    go('#/investments');
+  }
+  async function newView(ctx) {
+    const [custom, partners] = await Promise.all([ctx.store.list('categoryTemplate'), ctx.store.list('partner')]);
+    return wizardView({ store: ctx.store, templates: [...BUILT_IN_TEMPLATES, ...custom], partners, today: todayISO(), toast, go });
+  }
   const sampleButton = (ctx) => { const b = h('button', { class: 'btn btn--secondary', type: 'button' }, 'Try the sample portfolio'); b.addEventListener('click', () => addSample(ctx, b)); return b; };
   const firstRun = (ctx, where) => emptyBlock({
     iconName: 'landmark', title: 'Nothing on record yet',
-    text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Adding your own comes in the next update. Until then, try the sample portfolio to see how Apex works.' : 'Adding your own investments comes in the next update. Try the sample portfolio to see how Apex works.',
-    actions: sampleButton(ctx) });
+    text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
+    actions: [addLink(), sampleButton(ctx)] });
 
   // ---------- Home ----------
   async function homeView(ctx) {
@@ -122,7 +142,7 @@ export function mountWorkspace({ data, email, actions }) {
     const out = h('div', {});
 
     out.append(h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`),
-      settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName)));
+      settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName), h('div', { class: 'row row--actions' }, addLink())));
     if (sample) out.append(h('p', { class: 'note-box' }, 'You are looking at the sample portfolio. Nothing here is real. Remove it in Settings when you are ready to start your own.'));
     if (sum.errors.length) out.append(h('p', { class: 'alert alert--warn' }, `${plural(sum.errors.length, 'investment', 'investments')} could not be calculated and ${sum.errors.length === 1 ? 'is' : 'are'} left out of these totals. Open ${sum.errors.length === 1 ? 'it' : 'each one'} under Investments to see why.`));
     if (ctx.store.problems().length) out.append(h('p', { class: 'alert alert--warn' }, `${plural(ctx.store.problems().length, 'record', 'records')} could not be read on this device and ${ctx.store.problems().length === 1 ? 'is' : 'are'} being skipped.`));
@@ -197,7 +217,7 @@ export function mountWorkspace({ data, email, actions }) {
   async function listView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
-    const head = h('h1', { class: 'page-title' }, 'Investments');
+    const head = h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Investments'), addLink());
     if (!items.length) return h('div', {}, head, firstRun(ctx, 'list'));
     let filter = 'all', query = '';
     const listBox = h('div', {});
@@ -272,15 +292,15 @@ export function mountWorkspace({ data, email, actions }) {
     // tabs
     const panels = {};
     panels.overview = () => h('div', { class: 'flow' }, returns,
-      b.valuations.length > 0 && h('section', {}, sectionHead('Valuations'), h('ul', { class: 'rows' }, [...b.valuations].reverse().map((v) => h('li', {}, h('div', { class: 'row-line' },
+      b.valuations.length > 0 && h('section', {}, sectionHead('Valuations'), h('ul', { class: 'rows' }, [...b.valuations].reverse().map((v) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/valuation/${v.id}` },
         h('span', { class: 'date-col' }, fmtDate(v.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, `By ${SOURCE[v.source]}`), v.note && h('div', { class: 'row-sub' }, v.note)),
         h('div', { class: 'row-end' }, h('span', { class: 'money' }, money(v.valueKobo)))))))),
       b.schedules.length > 0 && h('section', {}, sectionHead('Regular payments'), h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
       working);
-    panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('div', { class: 'row-line' },
+    panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
       h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
       h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : h('p', { class: 'sub' }, 'No entries yet.'),
-      h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Amounts show money leaving you as minus and money reaching you as plus.`));
+      h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Amounts show money leaving you as minus and money reaching you as plus. Tap an entry to edit or delete it.`));
     panels.people = () => {
       const name = (pid) => (pid === 'me' ? 'You' : b.partners.find((p) => p.id === pid)?.name || 'Partner');
       const mine = partners.partners.find((p) => p.partnerId === 'me');
@@ -298,7 +318,9 @@ export function mountWorkspace({ data, email, actions }) {
         ...Object.entries(inv.customFields).map(([k, v]) => [defs.find((d) => d.key === k)?.label || k, v == null ? '' : String(v)]),
       ].filter(Boolean);
       return h('div', { class: 'flow' }, h('dl', { class: 'defs' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
-        inv.notes && h('section', {}, sectionHead('Notes'), h('p', { class: 'prose' }, inv.notes)));
+        inv.notes && h('section', {}, sectionHead('Notes'), h('p', { class: 'prose' }, inv.notes)),
+        h('section', {}, sectionHead('Delete'), h('p', { class: 'sub' }, 'Deleting hides this investment and everything recorded under it. You can undo it straight afterwards.'),
+          h('div', { class: 'row row--actions' }, h('button', { class: 'btn btn--secondary btn--danger', type: 'button', onclick: () => deleteInvestment(ctx, inv) }, 'Delete this investment'))));
     };
     const tabsList = [['overview', 'Overview'], ['ledger', 'Ledger'], partners && ['people', 'People'], ['details', 'Details']].filter(Boolean);
     const body = h('div', { role: 'tabpanel' });
@@ -306,7 +328,10 @@ export function mountWorkspace({ data, email, actions }) {
     const pick = (key) => { body.replaceChildren(panels[key]()); [...tabs.children].forEach((t) => t.setAttribute('aria-selected', String(t.dataset.k === key))); };
     tabsList.forEach(([k, l]) => tabs.append(h('button', { type: 'button', role: 'tab', 'data-k': k, 'aria-selected': 'false', onclick: () => pick(k) }, l)));
     pick('overview');
-    return h('div', { class: 'flow' }, h('a', { class: 'back', href: '#/investments' }, icon('chevronLeft', { size: 18 }), 'Investments'), head, tabs, body);
+    const actionsRow = h('div', { class: 'row row--actions' }, closed
+      ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => reopen(ctx, inv.id) }, 'Reopen this investment')
+      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close')]);
+    return h('div', { class: 'flow' }, h('a', { class: 'back', href: '#/investments' }, icon('chevronLeft', { size: 18 }), 'Investments'), head, actionsRow, tabs, body);
   }
 
   // ---------- Settings ----------
@@ -356,17 +381,19 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    paintChrome(page === 'investments' ? 'investments' : page === 'settings' ? 'settings' : 'home');
+    paintChrome(page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home');
     outlet.replaceChildren(skeleton());
     try {
       const ctx = await load();
       let view;
-      if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
+      if (page === 'new') view = await newView(ctx);
+      else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
+      else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);
       else if (page === 'settings') view = await settingsView(ctx);
       else view = await homeView(ctx);
       if (mine !== token) return;
-      paintChrome(page === 'investments' ? 'investments' : page === 'settings' ? 'settings' : 'home');
+      paintChrome(page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home');
       outlet.replaceChildren(view);
       window.scrollTo(0, 0);
     } catch (e) {
@@ -376,7 +403,7 @@ export function mountWorkspace({ data, email, actions }) {
     }
   }
   hideBtn.addEventListener('click', async () => {
-    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); render(); } catch (e) { console.error(e); }
+    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
   });
   hashHandler = () => { if (!root.isConnected) { window.removeEventListener('hashchange', hashHandler); return; } render(); };
   window.addEventListener('hashchange', hashHandler);
