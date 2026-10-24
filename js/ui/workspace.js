@@ -2,10 +2,11 @@
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
 import { h } from './dom.js';
-import { setBusy, withBusy } from './motion.js';
+import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
+import { slideThumb } from './formkit.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
-import { fmtDate, fmtMonthYear, greeting, money, pct, setHidden, todayISO, tone } from './fmt.js';
+import { amtText, fmtDate, fmtMonthYear, greeting, isHidden, money, pct, setHidden, todayISO, tone } from './fmt.js';
 import { addMonths } from '../engine/index.js';
 import { createPortfolio } from '../models/portfolio.js';
 import { BUILT_IN_TEMPLATES, findTemplate } from '../models/templates.js';
@@ -31,43 +32,103 @@ function rateSentence(inv, r) {
 const scheduleSentence = (s) => `${s.label || (s.kind === 'income' ? 'Income' : 'Cost')}: ${money(s.amountKobo, { compact: false })} ${s.frequency === 'custom' ? `every ${s.everyDays} days` : s.frequency}, from ${fmtDate(s.startDate)}${s.endDate ? ` to ${fmtDate(s.endDate)}` : ''}${s.adjustments.length ? `, changing ${plural(s.adjustments.length, 'time', 'times')}` : ''}${s.skippedDates.length ? `, ${plural(s.skippedDates.length, 'month', 'months')} skipped` : ''}.`;
 
 // ---------- small pieces ----------
+let heroPlayed = false; // the dashboard figure counts up once per visit, not on every page change
+const amt = (kobo, opts) => h('span', { class: 'amt' }, amtText(kobo, opts)); // blurs when amounts are hidden
 const pill = (net, roi, small) => {
   const t = tone(net);
-  return h('span', { class: `pill ${t}${small ? ' pill--small' : ''}` }, t === 'gain' && icon('arrowUp'), t === 'loss' && icon('arrowDown'), money(net, { sign: true }), roi != null && ` ${pct(roi, { sign: true })}`);
+  return h('span', { class: `pill ${t}${small ? ' pill--small' : ''}` }, t === 'gain' && icon('arrowUp'), t === 'loss' && icon('arrowDown'), amt(net, { sign: true }), roi != null && ` ${pct(roi, { sign: true })}`);
 };
 const pillPct = (net, roi) => { const t = tone(net); return h('span', { class: `pill pill--small ${t}` }, t === 'gain' && icon('arrowUp'), t === 'loss' && icon('arrowDown'), pct(roi, { sign: true })); };
 const stat = (label, value, cls = '') => h('div', {}, h('dt', {}, label), h('dd', { class: `money ${cls}` }, value));
-const signed = (kobo) => h('span', { class: `money ${tone(kobo)}` }, money(kobo, { sign: true }));
+const signed = (kobo) => h('span', { class: `money ${tone(kobo)}` }, amt(kobo, { sign: true }));
 const sectionHead = (title, right) => h('div', { class: 'section-head' }, h('h2', {}, title), right);
-const emptyBlock = ({ iconName, title, text, actions }) => h('div', { class: 'empty' },
-  h('span', { class: 'tile tile--large' }, icon(iconName, { size: 28 })), h('h2', {}, title), h('p', {}, text), actions && h('div', { class: 'row' }, actions));
-const skeleton = () => h('div', { 'aria-hidden': 'true' }, h('div', { class: 'skel', style: undefined, 'data-h': '1' }), h('div', { class: 'skel' }), h('div', { class: 'skel' }));
+const emptyBlock = ({ iconName, title, text, actions, hero = false }) => h('div', { class: hero ? 'empty panel empty--hero' : 'empty' },
+  h('span', { class: 'empty-art' }, icon(iconName, { size: 30 })), h('h2', {}, title), h('p', {}, text), actions && h('div', { class: 'row' }, actions));
+const miniEmpty = (iconName, text) => h('div', { class: 'mini-empty' }, icon(iconName, { size: 20 }), text);
+const rise = (el, i) => { if (el && !prefersReducedMotion()) { el.classList.add('rise'); el.style.setProperty('--i', String(i)); } return el; };
+const initials = (s) => (String(s || '').split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'A');
+const lockup = () => h('span', { class: 'lockup' }, h('img', { class: 'lockup-mark', src: '/img/apex-mark.svg', alt: '', width: 32, height: 32 }), h('span', { class: 'wordmark', role: 'img', 'aria-label': 'Apex' }));
+
+// Large amount with a quiet currency sign and quiet decimals. paint(text) re-draws it; works with the count-up.
+function heroAmount() {
+  const cur = h('span', { class: 'cur' }), whole = h('span', { class: 'whole' }), dec = h('span', { class: 'dec' });
+  const el = h('span', { class: 'hero-num amt' }, cur, whole, dec);
+  const paint = (text) => {
+    const m = /^(\D*?)(\d[\d,]*)(\.\d+)?(.*)$/.exec(String(text));
+    if (!m) { cur.textContent = ''; whole.textContent = text; dec.textContent = ''; return; }
+    const suffix = m[4] || '';
+    cur.textContent = m[1].trim() ? m[1] : '';
+    whole.textContent = suffix ? m[2] + (m[3] || '') + suffix : m[2];
+    dec.textContent = suffix ? '' : (m[3] || '');
+  };
+  return { el, paint };
+}
+
+// Keeps a sliding marker under the active item of a group (tab bar, side nav, detail tabs). Positions go through CSS variables.
+function indicator(group, selector, { vertical = false, center = 0 } = {}) {
+  const place = () => {
+    const on = group.querySelector(selector);
+    if (!on || !group.isConnected || !on.offsetWidth) return;
+    if (vertical) { group.style.setProperty('--ind-y', `${on.offsetTop}px`); group.style.setProperty('--ind-h', `${on.offsetHeight}px`); }
+    else { const w = center || on.offsetWidth; group.style.setProperty('--ind-x', `${on.offsetLeft + (on.offsetWidth - w) / 2}px`); group.style.setProperty('--ind-w', `${w}px`); }
+    group.style.setProperty('--ind-o', '1');
+  };
+  try { new MutationObserver(place).observe(group, { subtree: true, attributes: true, attributeFilter: ['aria-current', 'aria-selected'] }); } catch { /* old browser */ }
+  try { new ResizeObserver(place).observe(group); } catch { /* old browser */ }
+  requestAnimationFrame(place);
+  return place;
+}
+
+// Loading shapes that match each page, so the layout does not jump when real content arrives.
+function skeletonFor(page) {
+  const line = (c = '') => h('div', { class: `skeleton skeleton-line ${c}`.trim() });
+  const rows = (n) => h('div', { class: 'panel' }, Array.from({ length: n }, () => h('div', { class: 'sk-row' },
+    h('div', { class: 'skeleton skeleton-tile' }), h('div', { class: 'sk-lines' }, line('w60'), line('w35')), line('w20'))));
+  if (page === 'settings') return h('div', { class: 'flow', 'aria-hidden': 'true' }, line('w30 h-title'), h('div', { class: 'panel' }, line('w40'), line('w80'), line('w65')), h('div', { class: 'panel' }, line('w50'), line('w70')));
+  if (page === 'investments') return h('div', { class: 'flow', 'aria-hidden': 'true' }, line('w40 h-title'), h('div', { class: 'skeleton skeleton-search' }), rows(5));
+  return h('div', { class: 'flow', 'aria-hidden': 'true' }, line('w45 h-title'),
+    h('div', { class: 'dash' },
+      h('div', { class: 'dash-main' }, h('div', { class: 'panel' }, line('w30'), h('div', { class: 'skeleton skeleton-hero' }), h('div', { class: 'sk-stats' }, line(), line(), line(), line())), h('div', { class: 'skeleton skeleton-block' })),
+      h('div', { class: 'dash-side' }, h('div', { class: 'skeleton skeleton-block' }), h('div', { class: 'skeleton skeleton-block short' }))));
+}
 
 export function mountWorkspace({ data, email, actions }) {
   const root = h('div', { class: 'ws' });
   const outlet = h('div', { class: 'ws-outlet' });
-  const sideName = h('p', { class: 'side-name' });
+  const avatar = h('span', { class: 'avatar', 'aria-hidden': 'true' }), userName = h('p', { class: 'side-user-name' }), userSub = h('p', { class: 'side-user-sub' });
   const hideBtn = h('button', { class: 'icon-btn', type: 'button' });
-  let settings = null, token = 0, hashHandler = null;
+  let settings = null, token = 0, hashHandler = null, ctxCache = null;
 
   // ---------- chrome ----------
   const NAV = [['home', '#/', 'Home', 'home'], ['investments', '#/investments', 'Investments', 'list'], ['settings', '#/settings', 'Settings', 'sliders']];
   const tabLinks = NAV.map(([key, href, label, ic]) => h('a', { class: 'tab', href, 'data-key': key }, icon(ic, { size: 22 }), label));
   const sideLinks = NAV.map(([key, href, label, ic]) => h('a', { href, 'data-key': key }, icon(ic), label));
-  const topbar = h('header', { class: 'topbar' },
-    h('span', { class: 'brand' }, 'Apex'),
+  const sideNav = h('nav', { class: 'side-nav', 'aria-label': 'Main' }, sideLinks);
+  const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Main' }, tabLinks);
+  const moonIco = icon('moon'), sunIco = icon('sun');
+  moonIco.classList.add('theme-ico', 'theme-ico--moon'); sunIco.classList.add('theme-ico', 'theme-ico--sun');
+  const themeBtn = h('button', { class: 'icon-btn theme-toggle', type: 'button', 'aria-label': 'Switch between light and dark', title: 'Switch theme' }, moonIco, sunIco);
+  themeBtn.addEventListener('click', async () => {
+    await toggleTheme(themeBtn);
+    try { if (ctxCache) settings = await ctxCache.pf.updateSettings({ theme: currentTheme() }); } catch (e) { console.error(e); }
+  });
+  const lockBtn = (cls) => h('button', { class: cls, type: 'button', 'aria-label': 'Lock Apex now', title: 'Lock now', onclick: actions.onLock }, icon('lock'));
+  const topbar = h('header', { class: 'topbar' }, lockup(),
     h('div', { class: 'topbar-actions' },
       h('span', { class: 'chip-status', title: 'Your records are stored encrypted on this device. Syncing arrives in a later update.' }, 'Saved on this device'),
-      hideBtn,
-      h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Lock Apex now', title: 'Lock now', onclick: actions.onLock }, icon('lock'))));
+      hideBtn, themeBtn, lockBtn('icon-btn')));
   root.append(
-    h('aside', { class: 'ws-side' }, h('div', {}, h('span', { class: 'brand' }, 'Apex'), sideName), h('nav', { class: 'side-nav', 'aria-label': 'Main' }, sideLinks)),
+    h('aside', { class: 'ws-side' }, lockup(), sideNav,
+      h('div', { class: 'side-user' }, avatar, h('div', { class: 'side-user-text' }, userName, userSub), lockBtn('icon-btn'))),
     h('main', { class: 'ws-main' }, topbar, outlet),
-    h('nav', { class: 'tabbar', 'aria-label': 'Main' }, tabLinks));
+    tabbar);
+  indicator(sideNav, '[aria-current="page"]', { vertical: true });
+  indicator(tabbar, '[aria-current="page"]', { center: 28 });
 
   function paintChrome(page) {
     for (const a of [...tabLinks, ...sideLinks]) { if (a.dataset.key === page) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); }
-    sideName.textContent = settings?.portfolioName || '';
+    const who = settings?.displayName || String(email || '').split('@')[0] || 'You';
+    avatar.textContent = initials(who); userName.textContent = who; userSub.textContent = settings?.portfolioName || 'Encrypted on this device';
     const hidden = !!settings?.hideAmounts;
     hideBtn.replaceChildren(icon(hidden ? 'eyeOff' : 'eye'));
     hideBtn.setAttribute('aria-label', hidden ? 'Show amounts' : 'Hide amounts');
@@ -78,10 +139,18 @@ export function mountWorkspace({ data, email, actions }) {
     document.documentElement.style.setProperty('--text-scale', String((settings.textScale || 100) / 100));
     setHidden(settings.hideAmounts);
   }
+  // Plays the blur / focus animation on amounts for a moment after the hide setting changes.
+  function flashAmounts() { const r = document.documentElement; r.classList.add('amt-anim'); setTimeout(() => r.classList.remove('amt-anim'), 700); }
   function toast(text, action) {
-    const t = h('div', { class: 'toast', role: 'status' }, text,
-      action && h('button', { class: 'link-btn toast-btn', type: 'button', onclick: () => { t.remove(); action.run(); } }, action.label));
-    root.append(t); setTimeout(() => t.remove(), action ? 9000 : 3800);
+    root.querySelectorAll('.toast').forEach((x) => x.remove());
+    const timer = h('span', { class: 'toast-timer', 'aria-hidden': 'true' });
+    const t = h('div', { class: 'toast', role: 'status' }, icon(/^could not/i.test(text) ? 'alert' : 'checkCircle', { size: 18 }), h('span', { class: 'toast-text' }, text),
+      action && h('button', { class: 'link-btn toast-btn', type: 'button', onclick: () => { t.remove(); action.run(); } }, action.label), timer);
+    const ms = action ? 9000 : 3800;
+    t.style.setProperty('--ttl', `${ms}ms`);
+    const close = () => { if (!t.isConnected) return; t.classList.add('out'); setTimeout(() => t.remove(), prefersReducedMotion() ? 0 : 200); };
+    root.append(t);
+    if (prefersReducedMotion()) setTimeout(close, ms); else timer.addEventListener('animationend', close, { once: true });
   }
 
   // ---------- data ----------
@@ -130,7 +199,7 @@ export function mountWorkspace({ data, email, actions }) {
   }
   const sampleButton = (ctx) => { const b = h('button', { class: 'btn btn--secondary', type: 'button' }, 'Try the sample portfolio'); b.addEventListener('click', () => addSample(ctx, b)); return b; };
   const firstRun = (ctx, where) => emptyBlock({
-    iconName: 'landmark', title: 'Nothing on record yet',
+    hero: where === 'home', iconName: 'landmark', title: 'Nothing on record yet',
     text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
     actions: [addLink(), sampleButton(ctx)] });
 
@@ -138,91 +207,108 @@ export function mountWorkspace({ data, email, actions }) {
   async function homeView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
-    if (!items.length) return h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`), firstRun(ctx, 'home'));
+    const heading = h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`),
+      settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName)), items.length ? addLink() : null);
+    if (!items.length) return h('div', { class: 'flow' }, heading, firstRun(ctx, 'home'));
     const [sum, tl, up, rec, sample] = await Promise.all([ctx.pf.summary(asOf, items), ctx.pf.timeline(asOf), ctx.pf.upcoming(asOf), ctx.pf.recent(6), sampleLive(ctx.store)]);
-    const out = h('div', {});
 
-    out.append(h('div', {}, h('h1', { class: 'page-title' }, `${greeting()}${settings.displayName ? ', ' + settings.displayName : ''}.`),
-      settings.portfolioName && h('p', { class: 'sub' }, settings.portfolioName), h('div', { class: 'row row--actions' }, addLink())));
-    if (sample) out.append(h('p', { class: 'note-box' }, 'You are looking at the sample portfolio. Nothing here is real. Remove it in Settings when you are ready to start your own.'));
-    if (sum.errors.length) out.append(h('p', { class: 'alert alert--warn' }, `${plural(sum.errors.length, 'investment', 'investments')} could not be calculated and ${sum.errors.length === 1 ? 'is' : 'are'} left out of these totals. Open ${sum.errors.length === 1 ? 'it' : 'each one'} under Investments to see why.`));
-    if (ctx.store.problems().length) out.append(h('p', { class: 'alert alert--warn' }, `${plural(ctx.store.problems().length, 'record', 'records')} could not be read on this device and ${ctx.store.problems().length === 1 ? 'is' : 'are'} being skipped.`));
+    const notes = [];
+    if (sample) notes.push(h('p', { class: 'note-box' }, 'You are looking at the sample portfolio. Nothing here is real. Remove it in Settings when you are ready to start your own.'));
+    if (sum.errors.length) notes.push(h('p', { class: 'alert alert--warn' }, `${plural(sum.errors.length, 'investment', 'investments')} could not be calculated and ${sum.errors.length === 1 ? 'is' : 'are'} left out of these totals. Open ${sum.errors.length === 1 ? 'it' : 'each one'} under Investments to see why.`));
+    if (ctx.store.problems().length) notes.push(h('p', { class: 'alert alert--warn' }, `${plural(ctx.store.problems().length, 'record', 'records')} could not be read on this device and ${ctx.store.problems().length === 1 ? 'is' : 'are'} being skipped.`));
 
-    // the statement
+    // the statement: the memorable part of the dashboard
     let full = false;
-    const heroValue = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': 'Value of what you hold today. Press to switch between short and full amount.' }, money(sum.valueKobo));
-    heroValue.addEventListener('click', () => { full = !full; heroValue.textContent = money(sum.valueKobo, { compact: !full }); });
-    out.append(h('section', { class: 'statement', 'aria-label': 'Portfolio statement' },
-      h('p', { class: 'statement-label' }, `What you hold today, ${plural(sum.count.active, 'investment', 'investments')}`), heroValue, h('hr', { class: 'gold-rule' }),
-      h('p', { class: 'sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
+    const hero = heroAmount();
+    const heroBtn = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': 'Value of what you hold today. Press to switch between short and full amount.' }, hero.el);
+    heroBtn.addEventListener('click', () => { full = !full; hero.paint(amtText(sum.valueKobo, { compact: !full })); });
+    if (!heroPlayed && !isHidden()) {
+      animateNumber({ set textContent(t) { hero.paint(t); } }, sum.valueKobo, { duration: 900, format: (n) => amtText(Math.round(n)) });
+    } else hero.paint(amtText(sum.valueKobo));
+    heroPlayed = true;
+    const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
+      h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
+      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
       h('dl', { class: 'statement-line' },
-        stat('Money put in', money(sum.investedKobo + sum.costsKobo)), stat('Income received', money(sum.incomeKobo)),
-        stat('Sold for', money(sum.proceedsKobo)), stat('Net gain', money(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo)))));
+        stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
+        stat('Sold for', amt(sum.proceedsKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
 
     // growth chart
+    let chartPanel = null;
     if (tl.length > 1) {
-      const range = h('div', { class: 'seg', role: 'group', 'aria-label': 'Chart range' });
+      const range = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Chart range' });
       const readout = h('p', { class: 'readout', 'aria-live': 'off' });
       const box = h('div', { class: 'chart-box' });
-      const ranges = [['All', null], ['1 year', 12], ['6 months', 6]];
+      const ranges = [['1M', 1], ['6M', 6], ['1Y', 12], ['All', null]];
       const draw = (months) => {
+        ranges.forEach(([, m], i) => range.children[i].setAttribute('aria-pressed', String(m === months)));
         const from = months ? addMonths(asOf, -months) : '0000-00-00';
         const pts = tl.filter((p) => p.date >= from).map((p) => ({ date: p.date, a: p.valueKobo, b: p.putInKobo }));
-        const say = (p) => h('span', {}, fmtDate(p.date), ': worth ', h('strong', {}, money(p.a)), ', money put in ', h('strong', {}, money(p.b)));
-        const last = pts[pts.length - 1] || tl[tl.length - 1];
+        if (pts.length < 2) { readout.replaceChildren(); box.replaceChildren(h('p', { class: 'sub chart-empty' }, 'Not enough history in this range yet. Try a longer one.')); return; }
+        const say = (p) => h('span', {}, fmtDate(p.date), ': worth ', h('strong', {}, amt(p.a)), ', money put in ', h('strong', {}, amt(p.b)));
+        const last = pts[pts.length - 1];
         readout.replaceChildren(say(last));
         box.replaceChildren(lineChart({ points: pts, description: `Line chart of what your investments were worth over time, from ${fmtDate(pts[0].date)} to ${fmtDate(last.date)}. Latest: worth ${money(last.a)}, money put in ${money(last.b)}.`,
           onHover: (p) => readout.replaceChildren(say(p || last)) }));
-        ranges.forEach(([, m], i) => range.children[i].setAttribute('aria-pressed', String(m === months)));
       };
       ranges.forEach(([label, m]) => range.append(h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => draw(m) }, label)));
+      slideThumb(range);
       draw(null);
-      out.append(h('section', {}, sectionHead('How it has grown', range), readout, box,
-        h('p', { class: 'legend-inline' }, h('span', {}, 'Worth, including investments sold'), h('span', { class: 'dashed' }, 'Money put in'))));
+      chartPanel = h('section', { class: 'panel' }, sectionHead('How it has grown', range), readout, box,
+        h('p', { class: 'legend-inline' }, h('span', {}, 'Worth, including investments sold'), h('span', { class: 'dashed' }, 'Money put in')));
     }
 
     // allocation by category
     const byCat = new Map();
     for (const it of items) if (!it.error && it.metrics.valueKobo > 0) { const c = ctx.cat(it.investment.categoryId); byCat.set(c.name, (byCat.get(c.name) || 0) + it.metrics.valueKobo); }
     const segs = [...byCat].map(([label, valueKobo]) => ({ label, valueKobo })).sort((a, b) => b.valueKobo - a.valueKobo);
+    let allocPanel = null;
     if (segs.length) {
       const total = segs.reduce((t, s) => t + s.valueKobo, 0);
-      out.append(h('section', {}, sectionHead('Where it is held'),
-        h('div', { class: 'alloc' },
-          donut({ segments: segs, centre: money(total), description: `Donut chart of current value by category: ${segs.map((s) => `${s.label} ${pct(s.valueKobo / total, { dp: 0 })}`).join(', ')}.` }),
-          h('ul', { class: 'rows' }, segs.map((s, i) => h('li', {}, h('div', { class: 'row-line' }, h('span', { class: `swatch ${segmentClass(i)}` }),
-            h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, s.label)),
-            h('div', { class: 'row-end' }, h('span', { class: 'money' }, money(s.valueKobo)), h('span', { class: 'row-sub' }, pct(s.valueKobo / total, { dp: 1 }))))))))));
+      const dn = donut({ segments: segs, centre: amtText(total), formatValue: (k) => amtText(k), description: `Donut chart of current value by category: ${segs.map((s) => `${s.label} ${pct(s.valueKobo / total, { dp: 0 })}`).join(', ')}.` });
+      const legend = h('ul', { class: 'rows' }, segs.map((s, i) => {
+        const li = h('li', {}, h('div', { class: 'row-line', tabindex: '0' }, h('span', { class: `swatch ${segmentClass(i)}` }),
+          h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, s.label)),
+          h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(s.valueKobo)), h('span', { class: 'row-sub' }, pct(s.valueKobo / total, { dp: 1 })))));
+        const line = li.firstChild;
+        for (const [ev, v] of [['mouseenter', i], ['focus', i], ['mouseleave', null], ['blur', null]]) line.addEventListener(ev, () => dn.highlight(v));
+        return li;
+      }));
+      allocPanel = h('section', { class: 'panel' }, sectionHead('Where it is held'), h('div', { class: 'alloc' }, dn, legend));
     }
 
     // coming up
-    out.append(h('section', {}, sectionHead('Coming up'),
+    const comingPanel = h('section', { class: 'panel' }, sectionHead('Coming up'),
       up.length ? h('ul', { class: 'rows' }, up.slice(0, 6).map((u) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${u.investmentId}` },
         h('span', { class: `date-col${u.overdue ? ' overdue' : ''}` }, fmtDate(u.date)),
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, u.title), u.investmentName && h('div', { class: 'row-sub' }, u.investmentName)),
         u.amountKobo != null && h('div', { class: 'row-end' }, signed(u.kind === 'cost' ? -u.amountKobo : u.amountKobo), h('span', { class: 'row-sub' }, 'expected'))))))
-        : h('p', { class: 'sub' }, 'Nothing expected in the next 45 days.')));
+        : miniEmpty('calendar', 'Nothing expected in the next 45 days.'));
 
     // recent activity
-    out.append(h('section', {}, sectionHead('Recent activity'),
-      h('ul', { class: 'rows' }, rec.map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${e.investmentId}` },
+    const recentPanel = h('section', { class: 'panel' }, sectionHead('Recent activity'),
+      rec.length ? h('ul', { class: 'rows' }, rec.map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${e.investmentId}` },
         h('span', { class: 'date-col' }, fmtDate(e.date)),
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), h('div', { class: 'row-sub' }, e.investmentName)),
-        h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo))))))));
-    return stackChildren(out);
+        h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : miniEmpty('list', 'Nothing recorded yet.'));
+
+    const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes,
+      h('div', { class: 'dash' },
+        h('div', { class: 'dash-main' }, rise(statement, 0), rise(chartPanel, 2)),
+        h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 3)),
+        h('div', { class: 'dash-wide' }, rise(recentPanel, 4))));
+    return out;
   }
-  // Spacing between the blocks of a view is handled by `.ws-outlet > * + *`; views are flat wrappers.
-  function stackChildren(node) { node.className = 'flow'; return node; }
 
   // ---------- Investments list ----------
   async function listView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
     const head = h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Investments'), addLink());
-    if (!items.length) return h('div', {}, head, firstRun(ctx, 'list'));
-    let filter = 'all', query = '';
+    if (!items.length) return h('div', { class: 'flow' }, head, firstRun(ctx, 'list'));
+    let filter = 'all', query = '', first = true;
     const listBox = h('div', {});
-    const seg = h('div', { class: 'seg', role: 'group', 'aria-label': 'Filter' });
+    const seg = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Filter' });
     const search = h('input', { class: 'input', type: 'search', placeholder: 'Search by name or category', 'aria-label': 'Search investments' });
     const draw = () => {
       const q = query.trim().toLowerCase();
@@ -231,21 +317,26 @@ export function mountWorkspace({ data, email, actions }) {
         if (filter === 'active' && closed) return false; if (filter === 'closed' && !closed) return false;
         return !q || `${it.investment.name} ${ctx.cat(it.investment.categoryId).name}`.toLowerCase().includes(q);
       });
-      listBox.replaceChildren(shown.length ? h('ul', { class: 'rows' }, shown.map((it) => {
+      const ul = shown.length ? h('ul', { class: 'rows' }, shown.map((it, n) => {
         const inv = it.investment, c = ctx.cat(inv.categoryId), m = it.metrics;
-        return h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}` },
-          h('span', { class: 'tile' }, icon(c.icon)),
+        const li = h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}` },
+          h('span', { class: 'tile' }, icon(c.icon)), // a photo can replace the icon here later
           h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, inv.name),
             h('div', { class: 'row-sub' }, m?.basis === 'realized' ? `${c.name}, closed ${fmtDate(inv.closedOn || m.asOf)}` : `${c.name}, since ${fmtMonthYear(inv.openedOn)}`)),
           it.error ? h('div', { class: 'row-end' }, h('span', { class: 'row-sub overdue' }, 'Cannot be calculated'))
-            : h('div', { class: 'row-end' }, h('span', { class: 'money' }, money(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi))));
-      })) : h('p', { class: 'sub' }, 'No investments match.'));
+            : h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi))));
+        if (first) rise(li, Math.min(n, 8) * 0.6);
+        return li;
+      })) : miniEmpty('search', 'No investments match.');
+      listBox.replaceChildren(ul);
+      first = false;
       [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
     };
     [['all', 'All'], ['active', 'Active'], ['closed', 'Closed']].forEach(([f, l]) => seg.append(h('button', { type: 'button', 'data-f': f, 'aria-pressed': 'false', onclick: () => { filter = f; draw(); } }, l)));
+    slideThumb(seg);
     search.addEventListener('input', () => { query = search.value; draw(); });
     draw();
-    return h('div', { class: 'flow' }, head, h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), seg), listBox);
+    return h('div', { class: 'flow' }, head, h('div', { class: 'toolbar' }, h('div', { class: 'search' }, icon('search'), search), seg), h('div', { class: 'panel panel--flush' }, listBox));
   }
 
   // ---------- Investment detail ----------
@@ -264,18 +355,20 @@ export function mountWorkspace({ data, email, actions }) {
       : m.valueSource === 'valuation' ? `Valuation by ${SOURCE[b.valuations[b.valuations.length - 1].source]} on ${fmtDate(m.valuationDate)}.`
       : m.valueSource === 'assumed' ? 'Estimated from the rate you set.' : 'Shown at cost: no valuation or rate set yet.';
     let full = false;
-    const heroValue = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': `${closed ? 'Sold for' : 'Worth'}. Press to switch between short and full amount.` }, money(m.currentValueKobo));
-    heroValue.addEventListener('click', () => { full = !full; heroValue.textContent = money(m.currentValueKobo, { compact: !full }); });
+    const hero = heroAmount();
+    hero.paint(amtText(m.currentValueKobo));
+    const heroValue = h('button', { class: 'hero-btn money', type: 'button', 'aria-label': `${closed ? 'Sold for' : 'Worth'}. Press to switch between short and full amount.` }, hero.el);
+    heroValue.addEventListener('click', () => { full = !full; hero.paint(amtText(m.currentValueKobo, { compact: !full })); });
 
     const ann = m.annualized;
     const annText = ann.rate == null ? 'Not available yet' : `${pct(ann.rate)} a year`;
-    const head = h('section', { class: 'statement' },
-      h('div', { class: 'detail-head' }, h('span', { class: 'tile tile--large' }, icon(c.icon, { size: 28 })),
+    const head = h('section', { class: 'panel statement' },
+      h('div', { class: 'detail-head' }, h('span', { class: 'tile tile--large' }, icon(c.icon, { size: 28 })), // photo slot: an image can replace the icon later
         h('div', {}, h('h1', { class: 'page-title' }, inv.name), h('p', { class: 'sub' }, `${c.name}, ${closed ? 'closed' : 'active'} since ${fmtMonthYear(inv.openedOn)}`))),
-      h('p', { class: 'statement-label', style: undefined }, closed ? 'Sold for' : 'Worth today'), heroValue,
-      h('p', { class: 'sub' }, basisText), h('hr', { class: 'gold-rule' }),
-      h('p', { class: 'sub' }, pill(m.netGainKobo, m.roi), ' net gain, counting income and costs'),
-      h('dl', { class: 'statement-line' }, stat('Invested', money(m.investedKobo)), stat('Costs', money(m.costsKobo)), stat('Income received', money(m.incomeKobo)), stat('Held for', plural(m.daysHeld, 'day', 'days'))));
+      h('p', { class: 'statement-label' }, closed ? 'Sold for' : 'Worth today'), heroValue,
+      h('p', { class: 'sub' }, basisText),
+      h('p', { class: 'sub statement-sub' }, pill(m.netGainKobo, m.roi), ' net gain, counting income and costs'),
+      h('dl', { class: 'statement-line' }, stat('Invested', amt(m.investedKobo)), stat('Costs', amt(m.costsKobo)), stat('Income received', amt(m.incomeKobo)), stat('Held for', plural(m.daysHeld, 'day', 'days'))));
 
     const returns = h('dl', { class: 'defs' },
       h('dt', {}, 'Return on investment'), h('dd', { class: 'money' }, pct(m.roi)),
@@ -295,7 +388,7 @@ export function mountWorkspace({ data, email, actions }) {
     panels.overview = () => h('div', { class: 'flow' }, returns,
       b.valuations.length > 0 && h('section', {}, sectionHead('Valuations'), h('ul', { class: 'rows' }, [...b.valuations].reverse().map((v) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/valuation/${v.id}` },
         h('span', { class: 'date-col' }, fmtDate(v.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, `By ${SOURCE[v.source]}`), v.note && h('div', { class: 'row-sub' }, v.note)),
-        h('div', { class: 'row-end' }, h('span', { class: 'money' }, money(v.valueKobo)))))))),
+        h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(v.valueKobo)))))))),
       b.schedules.length > 0 && h('section', {}, sectionHead('Regular payments'), h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
       working);
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
@@ -307,8 +400,8 @@ export function mountWorkspace({ data, email, actions }) {
       const mine = partners.partners.find((p) => p.partnerId === 'me');
       return h('div', { class: 'flow' }, h('div', { class: 'scroll-x' }, h('table', { class: 'table' },
         h('thead', {}, h('tr', {}, ['Who', 'Put in', 'Share', 'Worth', 'Income', 'Net gain'].map((t) => h('th', { scope: 'col' }, t)))),
-        h('tbody', {}, partners.partners.map((p) => h('tr', {}, h('td', {}, name(p.partnerId)), h('td', {}, money(p.contributionKobo)), h('td', {}, pct(p.ownershipBp / 10000, { dp: 0 })),
-          h('td', {}, money(p.valueShareKobo)), h('td', {}, money(p.incomeShareKobo)), h('td', { class: tone(p.netGainKobo) }, money(p.netGainKobo, { sign: true }))))))),
+        h('tbody', {}, partners.partners.map((p) => h('tr', {}, h('td', {}, name(p.partnerId)), h('td', {}, amt(p.contributionKobo)), h('td', {}, pct(p.ownershipBp / 10000, { dp: 0 })),
+          h('td', {}, amt(p.valueShareKobo)), h('td', {}, amt(p.incomeShareKobo)), h('td', { class: tone(p.netGainKobo) }, amt(p.netGainKobo, { sign: true }))))))),
       mine && h('p', { class: 'sub' }, `Your own position, after what you put in: ${money(mine.netPositionKobo, { compact: false, sign: true })}.`));
     };
     panels.details = () => {
@@ -326,9 +419,10 @@ export function mountWorkspace({ data, email, actions }) {
     const tabsList = [['overview', 'Overview'], ['ledger', 'Ledger'], partners && ['people', 'People'], ['details', 'Details']].filter(Boolean);
     const body = h('div', { role: 'tabpanel' });
     const tabs = h('div', { class: 'tabs', role: 'tablist' });
-    const pick = (key) => { body.replaceChildren(panels[key]()); [...tabs.children].forEach((t) => t.setAttribute('aria-selected', String(t.dataset.k === key))); };
+    const pick = (key) => { const panel = panels[key](); panel.classList.add('fade-in'); body.replaceChildren(panel); [...tabs.children].forEach((t) => t.setAttribute('aria-selected', String(t.dataset.k === key))); };
     tabsList.forEach(([k, l]) => tabs.append(h('button', { type: 'button', role: 'tab', 'data-k': k, 'aria-selected': 'false', onclick: () => pick(k) }, l)));
     pick('overview');
+    indicator(tabs, '[aria-selected="true"]');
     const actionsRow = h('div', { class: 'row row--actions' }, closed
       ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => reopen(ctx, inv.id) }, 'Reopen this investment')
       : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close')]);
@@ -338,8 +432,9 @@ export function mountWorkspace({ data, email, actions }) {
   // ---------- Settings ----------
   async function settingsView(ctx) {
     const sample = await sampleLive(ctx.store);
-    const name = h('input', { class: 'input', id: 'displayName', value: settings.displayName, maxlength: 80, autocomplete: 'name' });
-    const pname = h('input', { class: 'input', id: 'portfolioName', value: settings.portfolioName, maxlength: 80 });
+    const who = settings.displayName || String(email || '').split('@')[0] || 'You';
+    const name = h('input', { class: 'input', id: 'displayName', value: settings.displayName, maxlength: 80, autocomplete: 'name', placeholder: 'How should Apex greet you?' });
+    const pname = h('input', { class: 'input', id: 'portfolioName', value: settings.portfolioName, maxlength: 80, placeholder: 'For example, My assets' });
     const saved = h('p', { class: 'hint', role: 'status' });
     const profile = h('form', { class: 'stack', novalidate: true },
       h('div', { class: 'field' }, h('label', { for: 'displayName' }, 'Your name'), name),
@@ -352,31 +447,43 @@ export function mountWorkspace({ data, email, actions }) {
         paintChrome('settings'); saved.textContent = 'Saved.';
       });
     });
+
+    // theme: three preview cards. The switch reveals outward from the card you pressed.
+    const themeOpts = h('div', { class: 'theme-opts', role: 'group', 'aria-label': 'Theme' },
+      [['system', 'Match device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => {
+        const b = h('button', { type: 'button', class: 'theme-opt', 'aria-pressed': String(v === settings.theme) },
+          h('span', { class: `theme-prev theme-prev--${v}`, 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {})), h('span', {}, l));
+        b.addEventListener('click', async () => {
+          [...themeOpts.children].forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+          await applyTheme(v, b);
+          settings = await ctx.pf.updateSettings({ theme: v });
+        });
+        return b;
+      }));
     const choice = (label, options, current, onPick) => {
-      const g = h('div', { class: 'seg', role: 'group', 'aria-label': label });
-      options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === current), onclick: async () => { await onPick(v); [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); } }, l)));
+      const g = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': label });
+      options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === current), onclick: async () => { [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); await onPick(v); } }, l)));
+      slideThumb(g);
       return g;
     };
-    const root_ = document.documentElement;
-    const theme = choice('Theme', [['system', 'Match device'], ['light', 'Light'], ['dark', 'Dark']], settings.theme, async (v) => {
-      if (v === 'system') { root_.removeAttribute('data-theme'); try { localStorage.removeItem('apex.theme'); } catch { /* storage unavailable */ } }
-      else { root_.setAttribute('data-theme', v); try { localStorage.setItem('apex.theme', v); } catch { /* storage unavailable */ } }
-      settings = await ctx.pf.updateSettings({ theme: v });
-    });
     const scale = choice('Text size', [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']], settings.textScale, async (v) => { settings = await ctx.pf.updateSettings({ textScale: v }); applyAppearance(); });
     const hide = h('input', { type: 'checkbox', id: 'hide' }); hide.checked = !!settings.hideAmounts;
-    hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); paintChrome('settings'); });
+    hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); flashAmounts(); paintChrome('settings'); });
     const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => removeSample(ctx)) }, 'Remove the sample portfolio') : sampleButton(ctx);
 
     return h('div', { class: 'settings flow' }, h('h1', { class: 'page-title' }, 'Settings'),
-      h('section', {}, sectionHead('Profile'), profile),
-      h('section', { class: 'stack' }, sectionHead('Appearance'), theme, scale, h('label', { class: 'check', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
-      h('section', { class: 'stack' }, sectionHead('Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
-        h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
-        h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))),
-      h('section', { class: 'stack' }, sectionHead('Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn),
-      h('section', { class: 'stack' }, sectionHead('Account'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'),
-        h('p', { class: 'hint' }, 'Your records are saved on this device only for now. Syncing between devices arrives in a later update, so keep your recovery key safe.')));
+      h('div', { class: 'settings-grid' },
+        h('div', { class: 'settings-col' },
+          h('section', { class: 'panel' }, h('div', { class: 'profile-head' }, h('span', { class: 'avatar avatar--lg', 'aria-hidden': 'true' }, initials(who)), h('div', {}, h('h2', {}, 'Profile'), h('p', { class: 'sub' }, email))), profile),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Appearance'), themeOpts, scale,
+            h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn)),
+        h('div', { class: 'settings-col' },
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
+            h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'),
+            h('p', { class: 'hint' }, 'Your records are saved on this device only for now. Syncing between devices arrives in a later update, so keep your recovery key safe.')))));
   }
 
   // ---------- routing ----------
@@ -384,10 +491,14 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    paintChrome(page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home');
-    outlet.replaceChildren(skeleton());
+    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home';
+    paintChrome(key);
+    outlet.setAttribute('aria-busy', 'true');
+    // The skeleton only appears if loading takes a moment, so quick pages do not flash.
+    const wait = setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
     try {
       const ctx = await load();
+      ctxCache = ctx;
       let view;
       if (page === 'new') view = await newView(ctx);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
@@ -396,17 +507,21 @@ export function mountWorkspace({ data, email, actions }) {
       else if (page === 'settings') view = await settingsView(ctx);
       else view = await homeView(ctx);
       if (mine !== token) return;
-      paintChrome(page === 'investments' || page === 'new' ? 'investments' : page === 'settings' ? 'settings' : 'home');
+      paintChrome(key);
       outlet.replaceChildren(view);
+      if (!view.dataset?.noenter) enter(view);
       window.scrollTo(0, 0);
     } catch (e) {
       if (mine !== token || (e instanceof StoreError && e.code === 'LOCKED')) return;
       outlet.replaceChildren(h('p', { class: 'alert alert--error', role: 'alert' }, e instanceof StoreError || e.code === 'INVALID' ? e.message : 'Something went wrong while reading your records. Reload the page and try again.'));
       console.error(e);
+    } finally {
+      clearTimeout(wait);
+      if (mine === token) outlet.removeAttribute('aria-busy');
     }
   }
   hideBtn.addEventListener('click', async () => {
-    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
+    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
   });
   hashHandler = () => { if (!root.isConnected) { window.removeEventListener('hashchange', hashHandler); return; } render(); };
   window.addEventListener('hashchange', hashHandler);

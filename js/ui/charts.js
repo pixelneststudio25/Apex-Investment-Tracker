@@ -12,7 +12,7 @@ const niceMax = (v) => {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * pow;
 };
 
-// points: [{ date, a, b }]. `a` is the gold line with an area under it; `b` is the dashed muted line.
+// points: [{ date, a, b }]. `a` is the accent line with an area under it; `b` is the dashed muted line.
 // onHover(point | null) lets the caller show a readout outside the SVG.
 export function lineChart({ points, description, onHover }) {
   const W = 640, H = 240, L = 8, R = 8, T = 14, B = 26, id = `g${++uid}`;
@@ -33,8 +33,8 @@ export function lineChart({ points, description, onHover }) {
   }
   root.append(svg('text', { x: L, y: H - 6, class: 'axis' }, fmtDate(points[0].date)), svg('text', { x: W - R, y: H - 6, class: 'axis', 'text-anchor': 'end' }, fmtDate(points[points.length - 1].date)));
   if (points.some((p) => p.b != null)) root.append(svg('path', { d: path('b'), class: 'line-b' }));
-  root.append(svg('path', { d: `${path('a')}L${X(points[points.length - 1].date).toFixed(1)} ${Y(0)}L${X(points[0].date).toFixed(1)} ${Y(0)}Z`, fill: `url(#${id})` }),
-    svg('path', { d: path('a'), class: 'line-a' }));
+  root.append(svg('path', { d: `${path('a')}L${X(points[points.length - 1].date).toFixed(1)} ${Y(0)}L${X(points[0].date).toFixed(1)} ${Y(0)}Z`, fill: `url(#${id})`, class: 'area' }),
+    svg('path', { d: path('a'), class: 'line-a', pathLength: 1 }));
 
   const cross = svg('line', { y1: T, y2: H - B, class: 'cross', visibility: 'hidden' });
   const dot = svg('circle', { r: 4.5, class: 'dot', visibility: 'hidden' });
@@ -57,25 +57,36 @@ export function lineChart({ points, description, onHover }) {
   return root;
 }
 
-// segments: [{ label, valueKobo }]. Colours are seg-1 .. seg-6 in the stylesheet.
-export function donut({ segments, centre, description }) {
+// segments: [{ label, valueKobo }]. Colours are seg-1 .. seg-6 in the stylesheet. Each segment sweeps in (CSS, driven by
+// custom properties set here). root.highlight(i | null) emphasises one segment and shows its value in the centre.
+export function donut({ segments, centre, description, formatValue = () => '' }) {
   const S = 180, c = S / 2, r = 70, sw = 22, C = 2 * Math.PI * r, gap = segments.length > 1 ? 2.5 : 0;
   const root = svg('svg', { viewBox: `0 0 ${S} ${S}`, class: 'donut', role: 'img', 'aria-label': description });
   root.append(svg('circle', { cx: c, cy: c, r, class: 'donut-track', 'stroke-width': sw, fill: 'none' }));
   const total = segments.reduce((t, s) => t + s.valueKobo, 0);
+  const circles = [];
   let acc = 0;
   if (total > 0) {
     segments.forEach((s, i) => {
-      const len = (s.valueKobo / total) * C;
-      root.append(svg('circle', {
-        cx: c, cy: c, r, fill: 'none', 'stroke-width': sw, class: `seg-${(i % 6) + 1}`,
-        'stroke-dasharray': `${Math.max(0, len - gap).toFixed(2)} ${(C - Math.max(0, len - gap)).toFixed(2)}`,
-        'stroke-dashoffset': (-acc).toFixed(2), transform: `rotate(-90 ${c} ${c})`,
-      }));
+      const len = (s.valueKobo / total) * C, dash = Math.max(0, len - gap);
+      const el = svg('circle', {
+        cx: c, cy: c, r, fill: 'none', 'stroke-width': sw, class: `donut-seg ${segmentClass(i)}`,
+        'stroke-dasharray': `${dash.toFixed(2)} ${(C - dash).toFixed(2)}`, 'stroke-dashoffset': (-acc).toFixed(2), transform: `rotate(-90 ${c} ${c})`,
+        style: { '--i': i, '--C': C.toFixed(2), '--len': dash.toFixed(2), '--rest': (C - dash).toFixed(2) },
+      });
+      circles.push(el); root.append(el);
       acc += len;
     });
   }
-  if (centre) root.append(svg('text', { x: c, y: c + 7, 'text-anchor': 'middle', class: 'donut-total' }, isHidden() ? HIDDEN_TEXT : centre));
+  const value = svg('text', { x: c, y: c + 3, 'text-anchor': 'middle', class: 'donut-total' }, isHidden() ? HIDDEN_TEXT : centre);
+  const caption = svg('text', { x: c, y: c + 22, 'text-anchor': 'middle', class: 'donut-cap' }, 'Total');
+  root.append(value, caption);
+  root.highlight = (i) => {
+    circles.forEach((el, j) => el.classList.toggle('is-hl', i === j));
+    root.classList.toggle('has-hl', i != null);
+    value.textContent = i == null ? (isHidden() ? HIDDEN_TEXT : centre) : (isHidden() ? HIDDEN_TEXT : formatValue(segments[i].valueKobo));
+    caption.textContent = i == null ? 'Total' : segments[i].label;
+  };
   return root;
 }
 export const segmentClass = (i) => `seg-${(i % 6) + 1}`;
