@@ -1,7 +1,7 @@
 // Motion helpers: busy buttons, count-up numbers, staggered lists, page and theme transitions.
 // Styles live in css/motion.css. Everything here respects "reduce motion" and never writes inline style attributes
 // (the site's content-security-policy blocks them), only CSS custom properties through the CSSOM.
-import { h } from './dom.js';
+import { h, svg } from './dom.js';
 
 export const prefersReducedMotion = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -108,3 +108,18 @@ export function applyTheme(mode, origin) {
   return transition(set, { kind: 'theme', origin });
 }
 export const toggleTheme = (origin) => applyTheme(currentTheme() === 'dark' ? 'light' : 'dark', origin);
+
+// ---------- vault opening ----------
+const MARK_PATH = 'M10.67 79.85 L12.95 78.56 Q14.85 77.48 16.24 75.79 L21.53 69.30 Q24.27 65.95 28.26 67.61 L29.06 67.95 Q33.05 69.61 35.71 66.19 L43.80 55.78 Q46.86 51.83 51.12 54.46 L53.50 55.93 Q57.32 58.30 60.17 54.82 L60.75 54.12 Q63.60 50.65 65.58 46.61 L67.89 41.88 Q70.08 37.39 72.54 33.04 L77.20 24.78';
+
+/** The brief "opening your vault" moment after unlocking: the logo draws, then the app fades in underneath. */
+export function unlockMoment() {
+  if (prefersReducedMotion()) return;
+  const overlay = h('div', { class: 'unlock-overlay', 'aria-hidden': 'true' },
+    svg('svg', { class: 'splash-mark', viewBox: '0 0 100 100' },
+      svg('rect', { width: 100, height: 100, rx: 22, fill: '#0F5C45' }),
+      svg('path', { class: 'splash-line', pathLength: '1', d: MARK_PATH, fill: 'none', stroke: '#fff', 'stroke-width': 8.4, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }),
+      svg('circle', { class: 'splash-dot', cx: 77.2, cy: 24.78, r: 6.9, fill: '#fff' })));
+  document.body.append(overlay);
+  setTimeout(() => { overlay.classList.add('out'); setTimeout(() => overlay.remove(), 460); }, 720);
+}

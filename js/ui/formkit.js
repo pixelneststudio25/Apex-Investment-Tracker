@@ -86,18 +86,35 @@ export function choiceList({ name, options, value, onChange, label }) {
   return box;
 }
 
-// Two or three short options in a row.
+// Two or three short options in a row, with a thumb that slides to the chosen one.
 export function segmented({ label, options, value, onChange }) {
-  const g = h('div', { class: 'seg', role: 'group', 'aria-label': label });
+  const g = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': label });
   options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === value), onclick: () => { [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); onChange(v); } }, l)));
+  slideThumb(g);
   return g;
 }
 
-export function checkbox({ label, checked, onChange }) {
+// Keeps the sliding thumb of a .seg.seg--slide group under its pressed button. Positions go through CSS variables
+// (the site's security policy blocks style attributes). Re-measures on resize, so font loading or text size changes are fine.
+export function slideThumb(group) {
+  const place = () => {
+    const on = group.querySelector('[aria-pressed="true"]');
+    if (!on || !group.isConnected || !on.offsetWidth) return;
+    group.style.setProperty('--thumb-x', `${on.offsetLeft}px`);
+    group.style.setProperty('--thumb-w', `${on.offsetWidth}px`);
+    group.style.setProperty('--thumb-o', '1');
+  };
+  try { new MutationObserver(place).observe(group, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] }); } catch { /* old browser */ }
+  try { new ResizeObserver(place).observe(group); } catch { /* old browser */ }
+  requestAnimationFrame(place);
+  return place;
+}
+
+export function checkbox({ label, checked, onChange, asSwitch = false }) {
   const id = nextId('c');
   const el = h('input', { type: 'checkbox', id, checked: checked || undefined });
   el.addEventListener('change', () => onChange(el.checked));
-  return h('label', { class: 'check', for: id }, el, h('span', {}, label));
+  return h('label', { class: asSwitch ? 'check check--switch' : 'check', for: id }, el, h('span', {}, label));
 }
 
 // Errors from stepErrors() -> shown on the matching fields; returns the first one that has a field on screen.

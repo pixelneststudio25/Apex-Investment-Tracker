@@ -48,9 +48,15 @@ html.is-booting.boot-done .splash { animation: splash-out var(--dur-slow) var(--
 @keyframes draw { from { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } to { stroke-dashoffset: 0; opacity: 1; } }
 @keyframes pop { to { transform: scale(1); } }
 
+/* ---- Vault opening (after unlock): same logo animation as the splash, a little faster ---- */
+.unlock-overlay { position: fixed; inset: 0; z-index: 900; display: flex; align-items: center; justify-content: center; background: var(--bg); animation: fade var(--dur-fast) var(--ease-out) both; }
+.unlock-overlay.out { animation: splash-out var(--dur-slow) var(--ease-out) forwards; pointer-events: none; }
+.unlock-overlay .splash-line { animation-duration: 0.45s; animation-delay: 0.05s; }
+.unlock-overlay .splash-dot { animation-delay: 0.38s; }
+
 /* ---- View transitions (page changes and the theme switch) ---- */
 html[data-vt="page"]::view-transition-old(root) { animation: fade-out 120ms var(--ease-out) both; }
-html[data-vt="page"]::view-transition-new(root) { animation: rise var(--dur-base) var(--ease-out) both; }
+html[data-vt="page"]::view-transition-new(root) { animation: fade var(--dur-base) var(--ease-out) both; }
 @keyframes fade-out { to { opacity: 0; } }
 html[data-vt="theme"]::view-transition-old(root), html[data-vt="theme"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html[data-vt="theme"]::view-transition-old(root) { z-index: 1; }

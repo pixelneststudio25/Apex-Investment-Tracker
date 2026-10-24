@@ -34,6 +34,20 @@ const PATHS = {
   calendar: 'M4 6h16v14H4zM4 10h16M8 3v4M16 3v4',
   doc: 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h7',
   check: 'M5 12l5 5 9-10',
+  shield: 'M12 3l8 3v6c0 4.5-3.2 8.2-8 9-4.8-.8-8-4.5-8-9V6zM9 12l2 2 4-4',
+  key: `${ring(8, 15, 4)}M11 12l9-9M16 7l3 3M14 9l2 2`,
+  clock: `${ring(12, 12, 9)}M12 7v5l3 2`,
+  sun: `${ring(12, 12, 4)}M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4`,
+  moon: 'M20 14.5A8.5 8.5 0 119.5 4a7 7 0 0010.5 10.5z',
+  x: 'M6 6l12 12M18 6L6 18',
+  copy: 'M9 9h11v11H9zM5 15V4h11',
+  download: 'M12 4v11M7 11l5 5 5-5M5 20h14',
+  mail: 'M3 6h18v12H3zM3 7l9 7 9-7',
+  alert: `${ring(12, 12, 9)}M12 8v5M12 16h.01`,
+  info: `${ring(12, 12, 9)}M12 11v5M12 8h.01`,
+  checkCircle: `${ring(12, 12, 9)}M8 12l3 3 5-6`,
+  arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  backspace: 'M21 5H9l-6 7 6 7h12zM15 9l-4 4M11 9l4 4',
 };
 
 export const iconNames = Object.keys(PATHS);

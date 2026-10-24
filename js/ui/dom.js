@@ -3,6 +3,7 @@ function apply(el, props) {
   for (const [k, v] of Object.entries(props || {})) {
     if (v == null || v === false) continue;
     if (k === 'class') el.setAttribute('class', v);
+    else if (k === 'style' && typeof v === 'object') { for (const [p, val] of Object.entries(v)) el.style.setProperty(p, String(val)); } // CSSOM only: the site's security policy blocks style attributes
     else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (v === true) el.setAttribute(k, '');
     else el.setAttribute(k, v);

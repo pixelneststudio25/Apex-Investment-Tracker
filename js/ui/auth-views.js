@@ -1,37 +1,81 @@
 import { AuthError } from '../core/auth.js';
-import { h } from './dom.js';
+import { h, svg } from './dom.js';
+import { icon } from './icons.js';
+import { stagger, withBusy } from './motion.js';
 
 const invalid = (msg) => new AuthError('VALIDATION', msg);
 
-function field({ id, label, type = 'text', autocomplete, hint, value, readonly, inputmode }) {
-  const input = h('input', { id, name: id, type, autocomplete, value, readonly, inputmode, class: 'input', required: true, spellcheck: 'false', autocapitalize: 'none' });
-  return { input, node: h('div', { class: 'field' }, h('label', { for: id }, label), input, hint && h('p', { class: 'hint' }, hint)) };
+function field({ id, label, type = 'text', autocomplete, hint, value, readonly, inputmode, placeholder }) {
+  const input = h('input', { id, name: id, type, autocomplete, value, readonly, inputmode, placeholder, class: 'input', required: true, spellcheck: 'false', autocapitalize: 'none' });
+  let control = input;
+  if (type === 'password') {
+    const eye = h('button', { class: 'input-reveal', type: 'button', 'aria-label': 'Show password', 'aria-pressed': 'false' }, icon('eye'));
+    eye.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      eye.setAttribute('aria-pressed', String(show)); eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      eye.replaceChildren(icon(show ? 'eyeOff' : 'eye'));
+    });
+    control = h('div', { class: 'input-wrap' }, input, eye);
+  }
+  return { input, node: h('div', { class: 'field' }, h('label', { for: id }, label), control, hint && h('p', { class: 'hint' }, hint)) };
 }
 const alertBox = () => h('div', { class: 'alert alert--error', role: 'alert', hidden: true });
 function showError(box, err) {
   box.textContent = err instanceof AuthError ? err.message : 'Something went wrong. Please try again.';
   box.hidden = false;
 }
-// Runs `run` on submit with a busy state and error display. Returns the form.
+// Runs `run` on submit with a spinner on the button and error display. Returns the form.
+// The busy label is announced to screen readers; sighted users see the spinner.
 function wireForm(form, button, box, busyLabel, run) {
+  const status = h('span', { class: 'sr-only', role: 'status', 'aria-live': 'polite' });
+  form.append(status);
   form.addEventListener('submit', async (e) => {
-    e.preventDefault(); box.hidden = true;
-    const label = button.textContent; button.disabled = true; button.textContent = busyLabel;
-    try { await run(); } catch (err) { showError(box, err); } finally { button.disabled = false; button.textContent = label; }
+    e.preventDefault(); box.hidden = true; status.textContent = busyLabel;
+    try { await withBusy(button, run); } catch (err) { showError(box, err); } finally { status.textContent = ''; }
   });
   return form;
 }
 
+// Line illustration for the welcome screen. Colours come from CSS classes, so it follows the theme.
+function welcomeArt() {
+  const s = (tag, props, ...kids) => svg(tag, props, ...kids);
+  return h('div', { class: 'welcome-art', 'aria-hidden': 'true' },
+    s('svg', { viewBox: '0 0 400 320', xmlns: 'http://www.w3.org/2000/svg' },
+      s('rect', { class: 'art-card', x: 40, y: 40, width: 320, height: 240, rx: 24 }),
+      s('rect', { class: 'art-bar', x: 68, y: 70, width: 90, height: 10, rx: 5 }),
+      s('rect', { class: 'art-ink', x: 68, y: 94, width: 150, height: 22, rx: 8 }),
+      s('path', { class: 'art-area', d: 'M68 232 L120 202 L160 216 L214 162 L252 180 L312 114 L312 256 L68 256 Z' }),
+      s('path', { class: 'art-line', d: 'M68 232 L120 202 L160 216 L214 162 L252 180 L312 114' }),
+      s('circle', { class: 'art-dot', cx: 312, cy: 114, r: 9 }),
+      s('g', { class: 'art-float' },
+        s('circle', { class: 'art-chip', cx: 326, cy: 68, r: 36 }),
+        s('circle', { class: 'art-ring', cx: 326, cy: 68, r: 18, 'stroke-dasharray': '64 120', transform: 'rotate(-90 326 68)' }),
+        s('circle', { class: 'art-ring art-ring--2', cx: 326, cy: 68, r: 18, 'stroke-dasharray': '30 120', 'stroke-dashoffset': -70, transform: 'rotate(-90 326 68)' })),
+      s('g', { class: 'art-float art-float--2' },
+        s('rect', { class: 'art-lock', x: 22, y: 232, width: 92, height: 48, rx: 16 }),
+        s('path', { class: 'art-lock-ico', d: 'M6 11h12v9H6zM8 11V8a4 4 0 118 0v3', transform: 'translate(46 237) scale(1.1)' }))));
+}
+
 export function welcomeView({ onCreate, onSignIn }) {
-  return h('section', { class: 'stack' },
-    h('h1', {}, 'Every asset, on record.'), h('hr', { class: 'gold-rule' }),
-    h('p', { class: 'muted' }, 'A private place for your investment records. Everything is encrypted on your device before it is saved, so only you can read it.'),
-    h('button', { class: 'btn', type: 'button', onclick: onCreate }, 'Create your account'),
-    h('button', { class: 'btn btn--secondary', type: 'button', onclick: onSignIn }, 'Sign in'));
+  const trust = h('ul', { class: 'trust' },
+    h('li', {}, icon('shield'), 'Encrypted on this device'),
+    h('li', {}, icon('clock'), 'Locks itself after 2 minutes'),
+    h('li', {}, icon('key'), 'Your recovery key stays with you'));
+  stagger(trust);
+  return h('section', { class: 'welcome' },
+    h('div', { class: 'welcome-copy' },
+      h('h1', { class: 'display' }, 'Every asset, on record.'),
+      h('p', { class: 'lead' }, 'A private place for your investment records. Everything is encrypted on your device before it is saved, so only you can read it.'),
+      h('div', { class: 'welcome-actions' },
+        h('button', { class: 'btn', type: 'button', onclick: onCreate }, 'Create your account'),
+        h('button', { class: 'btn btn--secondary', type: 'button', onclick: onSignIn }, 'Sign in')),
+      trust),
+    welcomeArt());
 }
 
 export function signupView({ onSubmit, onBack }) {
-  const email = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email' });
+  const email = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', placeholder: 'you@example.com' });
   const pw = field({ id: 'password', label: 'Password', type: 'password', autocomplete: 'new-password', hint: 'At least 10 characters. A phrase of several words is easy to remember and hard to guess.' });
   const pw2 = field({ id: 'password2', label: 'Confirm password', type: 'password', autocomplete: 'new-password' });
   const consent = h('input', { id: 'consent', type: 'checkbox', required: true });
@@ -61,12 +105,20 @@ export function ceremonyView({ recoveryKey, onDone }) {
 
   const grid = h('ol', { class: 'recovery-grid', 'aria-label': 'Your recovery key' },
     groups.map((g) => h('li', {}, h('code', {}, g))));
+  stagger(grid, { max: 12 });
   const a = field({ id: 'g1', label: `Group ${idx[0] + 1}`, autocomplete: 'off' });
   const b = field({ id: 'g2', label: `Group ${idx[1] + 1}`, autocomplete: 'off' });
   const understand = h('input', { id: 'understand', type: 'checkbox' });
   const btn = h('button', { class: 'btn', type: 'submit', disabled: true }, 'I have saved my recovery key');
   const box = alertBox();
   const copied = h('span', { class: 'hint', role: 'status' });
+  const copyBtn = h('button', { class: 'btn btn--secondary', type: 'button' }, icon('copy'), 'Copy');
+  copyBtn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(recoveryKey); copied.textContent = 'Copied. Paste it somewhere safe, then clear your clipboard.';
+      copyBtn.replaceChildren(icon('check'), 'Copied'); setTimeout(() => copyBtn.replaceChildren(icon('copy'), 'Copy'), 2200);
+    } catch { copied.textContent = 'Copy failed. Please save the file instead.'; }
+  });
 
   const sheet = () => `APEX RECOVERY KEY\n\n${recoveryKey}\n\nCreated: ${new Date().toDateString()}\n\n` +
     'Keep this somewhere safe and private (a locked drawer or safe). Anyone with this key and your account can read your records. ' +
@@ -82,13 +134,12 @@ export function ceremonyView({ recoveryKey, onDone }) {
     h('div', { class: 'alert alert--warn' }, h('strong', {}, 'This is the only way back in if you forget your password. '),
       'It is shown once. Apex cannot recover your data without it, and neither can anyone else.'),
     grid,
-    h('div', { class: 'row' },
-      h('button', { class: 'btn btn--secondary', type: 'button', onclick: async () => { try { await navigator.clipboard.writeText(recoveryKey); copied.textContent = 'Copied. Paste it somewhere safe, then clear your clipboard.'; } catch { copied.textContent = 'Copy failed. Please save the file instead.'; } } }, 'Copy'),
+    h('div', { class: 'row' }, copyBtn,
       h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => {
         const url = URL.createObjectURL(new Blob([sheet()], { type: 'text/plain' }));
         const link = h('a', { href: url, download: 'apex-recovery-key.txt' }); document.body.append(link); link.click(); link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-      } }, 'Download')),
+      } }, icon('download'), 'Download')),
     copied,
     h('p', {}, 'To confirm you saved it, type these two groups from your copy:'),
     h('div', { class: 'row row--fields' }, a.node, b.node),
@@ -101,11 +152,11 @@ export function verifyView({ email, onResend, onSignIn }) {
   const note = h('p', { class: 'hint', role: 'status' });
   const resend = h('button', { class: 'btn btn--secondary', type: 'button' }, 'Resend email');
   resend.addEventListener('click', async () => {
-    resend.disabled = true;
-    try { await onResend(); note.textContent = 'Sent. It can take a minute to arrive.'; } catch (e) { note.textContent = e instanceof AuthError ? e.message : 'Could not send. Try again shortly.'; }
-    setTimeout(() => { resend.disabled = false; }, 60000);
+    try { await withBusy(resend, onResend); note.textContent = 'Sent. It can take a minute to arrive.'; } catch (e) { note.textContent = e instanceof AuthError ? e.message : 'Could not send. Try again shortly.'; }
+    resend.disabled = true; setTimeout(() => { resend.disabled = false; }, 60000);
   });
   return h('section', { class: 'stack' },
+    h('div', { class: 'badge-ico' }, icon('mail')),
     h('h1', {}, 'Check your email'), h('hr', { class: 'gold-rule' }),
     h('p', {}, 'We sent a verification link to ', h('strong', {}, email), '. Open it, then come back and sign in with your password.'),
     h('p', { class: 'muted' }, 'Your recovery key is saved and your vault is ready on this device. Verification lets us back up your encrypted data.'),
@@ -114,7 +165,7 @@ export function verifyView({ email, onResend, onSignIn }) {
 }
 
 export function loginView({ email = '', notice, onSubmit, onResend, onCreate, onForgot }) {
-  const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email });
+  const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email, placeholder: 'you@example.com' });
   const p = field({ id: 'password', label: 'Password', type: 'password', autocomplete: 'current-password' });
   const box = alertBox();
   const extra = h('div', {});
@@ -140,7 +191,7 @@ export function loginView({ email = '', notice, onSubmit, onResend, onCreate, on
 
 
 export function forgotView({ email = '', onSubmit, onBack }) {
-  const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email });
+  const e = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', value: email, placeholder: 'you@example.com' });
   const box = alertBox(); const sent = h('div', { class: 'stack', hidden: true });
   const btn = h('button', { class: 'btn', type: 'submit' }, 'Send reset link');
   const form = h('form', { class: 'stack', novalidate: true },

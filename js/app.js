@@ -6,25 +6,24 @@ import { createVault } from './core/vault.js';
 import { ceremonyView, checkKeyView, forgotView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
 import { pinSetupView, pinUnlockView } from './ui/pin-views.js';
 import { mountWorkspace } from './ui/workspace.js';
+import { enter, toggleTheme, unlockMoment } from './ui/motion.js';
 
 // Read the link parameters before the Supabase client consumes and clears them.
 const linkParams = new URLSearchParams(location.hash.slice(1));
 const isRecoveryLink = linkParams.get('type') === 'recovery';
 const hashError = linkParams.get('error_description');
 
-// Theme switcher
-const root = document.documentElement;
-document.getElementById('theme-toggle')?.addEventListener('click', () => {
-  const next = getComputedStyle(root).colorScheme.startsWith('light') ? 'dark' : 'light';
-  root.setAttribute('data-theme', next);
-  try { localStorage.setItem('apex.theme', next); } catch { /* storage unavailable */ }
-});
+// Theme switcher: the circular reveal grows from the button; the choice is saved on this device.
+document.getElementById('theme-toggle')?.addEventListener('click', (e) => { toggleTheme(e.currentTarget); });
 
 const app = document.getElementById('app');
 // The signed-in workspace has its own navigation, so the plain page header is hidden while it is showing.
-const show = (node, { workspace = false } = {}) => {
+// `wide` gives the welcome screen room for its two columns. Every new screen rises in gently.
+const show = (node, { workspace = false, wide = false } = {}) => {
   document.body.classList.toggle('is-workspace', workspace);
+  document.body.classList.toggle('is-wide', wide);
   app.replaceChildren(node); window.scrollTo(0, 0);
+  enter(node);
 };
 
 let auth, vault;
@@ -42,7 +41,7 @@ const idle = createIdleLock({ ms: 120000, onLock: () => lockNow() });
 document.addEventListener('visibilitychange', () => (document.hidden ? idle.hidden() : idle.visible()));
 
 // ---------- flows ----------
-const enterApp = () => { idle.start(); showHome(); };
+const enterApp = () => { idle.start(); unlockMoment(); showHome(); };
 
 async function afterUnlock() { // after password login or recovery
   const rec = await auth.pinInfo();
@@ -73,7 +72,7 @@ const showSetPin = () => show(pinSetupView({
   onSkip: enterApp,
 }));
 
-const showWelcome = () => show(welcomeView({ onCreate: showSignup, onSignIn: () => showLogin() }));
+const showWelcome = () => show(welcomeView({ onCreate: showSignup, onSignIn: () => showLogin() }), { wide: true });
 
 function showSignup() {
   show(signupView({

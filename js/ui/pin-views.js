@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { icon } from './icons.js';
 
 // A 4-digit PIN pad with soft dots, shake on error, keyboard support and an optional light haptic tap.
 function pinPad({ subtitle, onEntered }) {
@@ -28,10 +29,10 @@ function pinPad({ subtitle, onEntered }) {
   }
   const back = () => { if (!busy) { value = value.slice(0, -1); render(); } };
 
-  const key = (label, onclick, aria) => h('button', { class: 'pin-key', type: 'button', onclick, 'aria-label': aria || label }, label);
+  const key = (label, onclick, aria) => h('button', { class: label instanceof Node ? 'pin-key pin-key--icon' : 'pin-key', type: 'button', onclick, 'aria-label': aria || label }, label);
   const keys = h('div', { class: 'pin-keys' },
     ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => key(String(n), () => press(String(n)))),
-    h('span', {}), key('0', () => press('0')), key('⌫', back, 'Delete'));
+    h('span', { 'aria-hidden': 'true' }), key('0', () => press('0')), key(icon('backspace'), back, 'Delete'));
 
   const node = h('div', { class: 'pin-pad' }, dotsRow, msg, keys);
   const onKey = (e) => {
