@@ -1,0 +1,61 @@
+/* Phase 7: projections, export, and the printable statement. Colours come from the existing tokens, so both themes work. */
+
+/* ---- projections ---- */
+.scen-grid { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 52rem) { .scen-grid { grid-template-columns: 1fr 1fr; } }
+.scen { margin: 0; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-input); display: grid; gap: var(--space-4); }
+.scen > legend { padding: 0 var(--space-2); font-weight: 600; }
+.field-label { display: block; margin-bottom: var(--space-2); font-size: var(--fs-small); font-weight: 500; }
+.proj-table th, .proj-table td { white-space: nowrap; }
+.proj-table tbody th { text-align: left; font-weight: 600; color: var(--text); }
+.proj-table td.gain { color: var(--positive); }
+.proj-table td.loss { color: var(--negative); }
+
+/* ---- export ---- */
+.export-list { margin-top: var(--space-2); }
+.export-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.export-row:last-child { border-bottom: 0; }
+.export-row .btn { flex: 0 0 auto; }
+
+/* ---- statement on screen ---- */
+.stmt-controls { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
+@media (min-width: 40rem) { .stmt-controls { grid-template-columns: 12rem 1fr; } }
+.statement-doc { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-6); display: grid; gap: var(--space-6); }
+.doc-head { display: grid; gap: var(--space-1); }
+.doc-brand { margin: 0; font-size: var(--fs-caption); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.doc-title { margin: 0; font-family: var(--font-serif); font-size: var(--fs-h1); font-weight: 600; }
+.doc-line { margin: 0; color: var(--text-muted); font-size: var(--fs-small); }
+.doc-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: var(--space-4); margin: 0; padding: var(--space-4) 0; border-block: 1px solid var(--border); }
+.doc-summary dt { color: var(--text-muted); font-size: var(--fs-caption); }
+.doc-summary dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.doc-table { width: 100%; border-collapse: collapse; font-size: var(--fs-small); font-variant-numeric: tabular-nums; }
+.doc-table th, .doc-table td { padding: var(--space-2) var(--space-3) var(--space-2) 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.doc-table thead th { color: var(--text-muted); font-weight: 500; }
+.doc-table .num { text-align: right; white-space: nowrap; }
+.doc-table tfoot th, .doc-table tfoot td { font-weight: 600; border-bottom: 0; border-top: 2px solid var(--border-strong); }
+.doc-table .gain { color: var(--positive); }
+.doc-table .loss { color: var(--negative); }
+.doc-sub { display: block; font-weight: 400; color: var(--text-muted); font-size: var(--fs-caption); }
+.doc-section { display: grid; gap: var(--space-3); }
+.doc-section h3 { margin: 0; font-size: var(--fs-h3); }
+.doc-note, .doc-foot p { margin: 0; color: var(--text-muted); font-size: var(--fs-caption); }
+.statement-doc .scroll-x { overflow-x: auto; }
+
+/* ---- printing: just the document, black on white ---- */
+@page { margin: 16mm; }
+@media print {
+  html, body { background: #fff !important; color: #000 !important; }
+  .ws-side, .topbar, .tabbar, .toast, .no-print, .skip-link { display: none !important; }
+  .ws, .ws-main, .ws-outlet { display: block !important; max-width: none !important; width: auto !important; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  .ws-outlet > * + * { margin-top: 0 !important; }
+  .statement-page { display: block !important; }
+  .statement-doc { --text: #000; --text-muted: #444; --border: #999; --border-strong: #000; --positive: #000; --negative: #000; --surface: #fff;
+    border: 0; border-radius: 0; padding: 0; background: #fff; color: #000; box-shadow: none; gap: 14pt; font-size: 10pt; }
+  .doc-title { font-size: 20pt; }
+  .doc-table th, .doc-table td { padding-block: 3pt; }
+  .doc-table tr, .doc-summary > div, .doc-head { break-inside: avoid; }
+  .doc-section { break-inside: auto; }
+  .doc-table thead { display: table-header-group; }
+  .statement-doc .scroll-x { overflow: visible; }
+  a { color: inherit; text-decoration: none; }
+}

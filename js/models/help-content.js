@@ -31,7 +31,7 @@ export const EXAMPLE = (() => {
 const X = EXAMPLE.text;
 
 // ---------- where "Try it now" and the sample portfolio can point ----------
-export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help']);
+export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help', '#/projections', '#/export']);
 export const RECORD_KINDS = Object.freeze(['entry', 'valuation', 'close']); // #/investments/<id>/<kind>, see js/ui/forms.js
 export const TRY_ACTIONS = Object.freeze(['palette']);
 // The sample portfolio is created in this order (js/models/sample.js), and its ids are kept in order in the store.
@@ -250,6 +250,25 @@ export const TOPICS = Object.freeze([
     sample: null,
     keywords: 'search palette command keyboard shortcut ctrl k jump find',
   },
+  {
+    id: 'projections-export', title: 'Looking ahead, exporting and printing', icon: 'chart', tint: 5,
+    summary: 'Try a what-if rate, download your records for a spreadsheet, or print a clean statement.',
+    lead: 'Three things for when you want to look past today or hand your figures to someone else. A projection is a what-if and never a fact. Files and statements are plain copies of what you already recorded.',
+    mock: { type: 'statement' },
+    steps: [
+      { title: 'Open Projections', text: 'Choose Look ahead on an open investment, or open Projections from Settings or from search. Closed investments have nothing left to project.' },
+      { title: 'Type a yearly rate', text: 'For example 12 for twelve percent a year. If the investment already has a rate, Apex fills it in as a starting answer, and you can change it. Choose whether it grows or loses value, and whether it is simple or compounded.' },
+      { title: 'Compare a second scenario', text: 'Fill in Scenario B to see two rates side by side, with the difference at 1, 3, 5 and 10 years. You can add one more number of years of your own.', more: 'valuations-rates' },
+      { title: 'Read the answer as a what-if', text: 'Every table is marked Projection. It starts from what the investment is worth today and assumes the rate holds every year. Regular payments you set up, such as rent, are included from tomorrow on. Payments already due but not recorded are never counted, because Apex does not assume money arrived.', more: 'income-costs' },
+      { title: 'Download your records', text: 'Under Export and print, download the ledger, the valuations or a summary as a CSV file. Amounts are plain naira with two decimals, and money leaving you is minus.' },
+      { title: 'Print a statement', text: 'Open the statement, choose a date, and use Print or save as PDF. You can include every entry and valuation, or print one investment on its own. Amounts must be showing, so turn off Hide amounts first.' },
+    ],
+    tryIt: { label: 'Open Projections', route: '#/projections' },
+    goodToKnow: 'A downloaded file is not encrypted. Your records inside Apex are, but a file on your phone or computer is plain text, so keep it somewhere private. Nothing you try in Projections is saved.',
+    glossary: ['projection'], faq: [],
+    sample: null,
+    keywords: 'projection forecast what if future scenario export csv spreadsheet excel download print statement pdf report',
+  },
 ]);
 
 // ---------- glossary ----------
@@ -267,6 +286,7 @@ export const GLOSSARY = Object.freeze([
   { id: 'ownership-share', term: 'Share', aka: 'ownership share, percentage', meaning: 'Your percentage of a shared investment. Shares must total exactly 100%, and Apex splits every amount to the exact kobo.' },
   { id: 'payout', term: 'Payout', aka: 'share-out', meaning: 'Money a business or partnership shares out to you, such as a December share-out. It counts as income.' },
   { id: 'proceeds', term: 'Proceeds', aka: 'sale proceeds', meaning: 'The money you receive when you sell or cash out an investment. You enter it when you close the investment.' },
+  { id: 'projection', term: 'Projection', aka: 'forecast, what if', meaning: 'A what-if, not a fact. Apex takes what an investment is worth today, applies a yearly rate you choose and shows where that would lead. It is never saved and never changes your real figures. For example, ₦10,000,000 at 12% a year, simple, is ₦11,200,000 after one year.' },
   { id: 'recovery-key', term: 'Recovery key', meaning: 'The long key shown once when you created your account. It is the way back in if you forget your password and cannot unlock on this device. Apex keeps no copy, so nobody can recreate it for you.' },
   { id: 'regular-payment', term: 'Regular payment', aka: 'schedule, recurring', meaning: 'A repeating income or cost, such as rent every year or a monthly service charge. Apex works out when each one is due and lists it under Coming up. It counts in your figures only after you record it in the ledger.' },
   { id: 'roi', term: 'Return on investment', aka: 'ROI', meaning: 'Net gain divided by the money put in plus costs, shown as a percentage. It ignores time, so 30% over one year and 30% over ten years look the same. Annualized return fixes that.' },

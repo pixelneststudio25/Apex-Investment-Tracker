@@ -19,6 +19,7 @@ import { isPaletteOpen, openPalette } from './palette.js';
 import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip, syncPanel } from './sync-ui.js';
 import { manageView } from './manage-views.js';
+import { reportView } from './report-views.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
@@ -529,7 +530,7 @@ export function mountWorkspace({ data, email, actions }) {
     indicator(tabs, '[aria-selected="true"]');
     const actionsRow = h('div', { class: 'row row--actions' }, closed
       ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => reopen(ctx, inv.id) }, 'Reopen this investment')
-      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/edit` }, 'Edit')]);
+      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/edit` }, 'Edit'), h('a', { class: 'btn btn--secondary', href: `#/projections/${inv.id}` }, 'Look ahead')]);
     return h('div', { class: 'flow' }, h('a', { class: 'back', href: '#/investments' }, icon('chevronLeft', { size: 18 }), 'Investments'), head, actionsRow, tabs, body);
   }
 
@@ -597,6 +598,8 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'settings-col' },
           h('section', { class: 'panel stack' }, h('h2', {}, 'Your records'), h('p', { class: 'sub' }, 'Reminders you have set, and anything you deleted that can still be brought back.'),
             h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/reminders' }, 'Reminders'), h('a', { class: 'btn btn--secondary', href: '#/deleted' }, 'Recently deleted'))),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Look ahead, export and print'), h('p', { class: 'sub' }, 'Try a what-if rate on an investment, download your records for a spreadsheet, or print a clean statement.'),
+            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/projections' }, 'Projections'), h('a', { class: 'btn btn--secondary', href: '#/export' }, 'Export and print'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
             h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
           actions.sync && syncPanel({ sync: actions.sync, toast, actions }),
@@ -628,6 +631,7 @@ export function mountWorkspace({ data, email, actions }) {
   async function toggleHide() {
     try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
   }
+  async function showAmounts() { if (settings?.hideAmounts) await toggleHide(); }
   async function paletteItems() {
     const ctx = ctxCache || await load();
     const [invs, dismissed] = await Promise.all([ctx.pf.investments(), ctx.store.meta.get('setupDismissed')]);
@@ -645,6 +649,9 @@ export function mountWorkspace({ data, email, actions }) {
       dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render(); else go('#/'); }, 'getting started onboarding'),
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
+      cmd('Go to', 'Projections', 'chart', () => go('#/projections'), 'look ahead what if future forecast scenario'),
+      cmd('Go to', 'Export and print', 'download', () => go('#/export'), 'csv spreadsheet excel download save'),
+      cmd('Go to', 'Printable statement', 'doc', () => go('#/statement'), 'print pdf report statement'),
       cmd('Go to', 'Reminders', 'calendar', () => go('#/reminders'), 'dates due remind tax lease'),
       cmd('Go to', 'Recently deleted', 'undo', () => go('#/deleted'), 'restore trash bin removed'),
       cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
@@ -674,7 +681,7 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' || page === 'export' || page === 'statement' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
     root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2));
@@ -687,6 +694,7 @@ export function mountWorkspace({ data, email, actions }) {
       let view;
       if (page === 'new') view = await newView(ctx);
       else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
+      else if (page === 'projections' || page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);
