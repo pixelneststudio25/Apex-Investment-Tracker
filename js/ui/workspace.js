@@ -218,7 +218,7 @@ export function mountWorkspace({ data, email, actions }) {
   }
   const sampleButton = (ctx) => { const b = h('button', { class: 'btn btn--secondary', type: 'button' }, 'Try the sample portfolio'); b.addEventListener('click', () => addSample(ctx, b)); return b; };
   const firstRun = (ctx, where) => emptyBlock({
-    hero: where === 'home', iconName: 'landmark', title: 'Nothing on record yet',
+    hero: true, iconName: 'landmark', title: 'Nothing on record yet',
     text: where === 'home' ? 'Your investments will appear here, with what they are worth and what they have earned. Add your first one, or try the sample portfolio to see how Apex works.' : 'Add your first investment, or try the sample portfolio to see how Apex works.',
     actions: [addLink(), sampleButton(ctx)], help: { topic: 'start', text: 'New to Apex? Read the 5-minute guide' } });
 
@@ -393,7 +393,7 @@ export function mountWorkspace({ data, email, actions }) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
     const head = h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Investments'), addLink());
-    if (!items.length) return h('div', { class: 'flow' }, head, firstRun(ctx, 'list'));
+    if (!items.length) return h('div', { class: 'flow' }, h('h1', { class: 'page-title' }, 'Investments'), firstRun(ctx, 'list')); // same first-run card as Home, with its own buttons
     let filter = 'all', query = '', first = true;
     const listBox = h('div', {});
     const seg = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Filter' });
