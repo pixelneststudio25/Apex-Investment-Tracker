@@ -1,0 +1,16 @@
+/* Editing, regular payments, change history, reminders. Tokens come from tokens.css. */
+.note-box--link { display: block; text-decoration: none; color: inherit; }
+.note-box--link:hover { background: var(--surface-2); }
+.row-link { text-decoration: none; color: inherit; min-width: 0; }
+.row-end.actions { display: flex; gap: var(--space-2); flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.section-head .btn, .section-head .link-btn { margin-left: auto; }
+.btn--small .icon { width: 16px; height: 16px; }
+
+.versions { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.version { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); }
+.version > * + * { margin-top: var(--space-3); }
+.version-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.diff { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); font-size: var(--fs-small); }
+.diff li { padding-left: var(--space-3); border-left: 2px solid var(--border); overflow-wrap: anywhere; }
+
+.settings .panel .row > .btn { flex: 0 1 auto; }

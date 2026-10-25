@@ -2,8 +2,11 @@
 // Conventions chosen where the plan left room:
 //  - Value for an ACTIVE investment: latest valuation on/before asOf; else each capital_in entry grown at the
 //    assumed/agreed rates from its own date; else cost (money invested). Valuations are not extrapolated.
-//  - netGain = (value + proceeds received) + income - invested - costs. For a closed investment value is 0 and
-//    the proceeds are the figure.
+//  - netGain = (value + proceeds + repayments received) + income - invested - costs. For a closed investment value
+//    is 0 and the money received is the figure.
+//  - A loan repayment is money coming back AND a reduction of what is still owed: it is taken off the grown value
+//    (grown from its own date at the same rates, so interest keeps running only on what is left) and counted as
+//    money received, so it is never counted twice.
 //  - Yield = trailing 12 months of (income + payout - costs) / total invested.
 import { addMonths, compareDates, daysBetween } from './dates.js';
 import { dec, D, toKobo } from './money.js';
@@ -17,7 +20,7 @@ export function investmentMetrics({ investment = {}, entries = [], valuations = 
   const live = entries.filter((e) => compareDates(e.date, asOf) <= 0);
   const of = (...kinds) => live.filter((e) => kinds.includes(e.kind));
   const capital = of('capital_in').sort((a, b) => compareDates(a.date, b.date));
-  const investedKobo = sum(capital), costsKobo = sum(of('cost')), incomeKobo = sum(of('income', 'payout')), proceedsKobo = sum(of('proceeds'));
+  const investedKobo = sum(capital), costsKobo = sum(of('cost')), incomeKobo = sum(of('income', 'payout')), proceedsKobo = sum(of('proceeds')), repaidKobo = sum(of('repayment'));
   // With a closing date, the date decides (so a past date shows the investment as it was while still open);
   // a closed status with no closing date is closed on every date.
   const closed = investment.closedOn ? compareDates(investment.closedOn, asOf) <= 0 : investment.status === 'closed';
@@ -29,17 +32,19 @@ export function investmentMetrics({ investment = {}, entries = [], valuations = 
     const behaviour = investment.behaviors?.valueChange;
     if (vals.length) { const v = vals[vals.length - 1]; valueKobo = v.valueKobo; valueSource = 'valuation'; valuationDate = v.date; }
     else if (rates.length && behaviour !== 'none' && behaviour !== 'manualOnly' && capital.length) {
-      valueKobo = toKobo(capital.reduce((t, c) => t.plus(valueAfter(c.amountKobo, c.date, asOf, rates)), new D(0)));
+      const grown = capital.reduce((t, c) => t.plus(valueAfter(c.amountKobo, c.date, asOf, rates)), new D(0));
+      const repaid = of('repayment').reduce((t, r) => t.plus(valueAfter(r.amountKobo, r.date, asOf, rates)), new D(0));
+      valueKobo = Math.max(0, toKobo(grown.minus(repaid)));
       valueSource = 'assumed';
-    } else { valueKobo = investedKobo; valueSource = 'cost'; }
+    } else { valueKobo = Math.max(0, investedKobo - repaidKobo); valueSource = 'cost'; }
   }
-  const totalValueKobo = valueKobo + proceedsKobo;
+  const totalValueKobo = valueKobo + proceedsKobo + repaidKobo;
   const netGainKobo = totalValueKobo + incomeKobo - investedKobo - costsKobo;
   const basisKobo = investedKobo + costsKobo;
 
   // Annualised return
   const startDate = capital[0]?.date ?? investment.openedOn ?? null;
-  const proceedDates = of('proceeds').map((e) => e.date).sort(compareDates);
+  const proceedDates = of('proceeds', 'repayment').map((e) => e.date).sort(compareDates);
   const endDate = closed ? (investment.closedOn && compareDates(investment.closedOn, asOf) <= 0 ? investment.closedOn : proceedDates[proceedDates.length - 1] ?? asOf) : asOf;
   const daysHeld = startDate ? Math.max(0, daysBetween(startDate, endDate)) : 0;
   let annualized = { method: null, rate: null, shortHold: daysHeld < 365 };
@@ -58,9 +63,9 @@ export function investmentMetrics({ investment = {}, entries = [], valuations = 
 
   return {
     asOf, daysHeld, basis: closed ? 'realized' : 'unrealized',
-    investedKobo, costsKobo, incomeKobo, proceedsKobo,
+    investedKobo, costsKobo, incomeKobo, proceedsKobo, repaidKobo,
     valueKobo, valueSource, valuationDate, totalValueKobo,
-    currentValueKobo: closed ? proceedsKobo : valueKobo,
+    currentValueKobo: closed ? proceedsKobo + repaidKobo : valueKobo,
     netGainKobo, roi: ratio(netGainKobo, basisKobo), annualized,
     yield: { trailing12mNetIncomeKobo: trailingNet, rate: ratio(trailingNet, investedKobo) },
   };

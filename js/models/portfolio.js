@@ -75,7 +75,7 @@ export function createPortfolio(store) {
   // Portfolio totals across live investments; broken ones are left out of the totals and listed in `errors`.
   async function summary(asOf, items) {
     items ||= await overview(asOf);
-    const total = { investedKobo: 0, costsKobo: 0, incomeKobo: 0, proceedsKobo: 0, valueKobo: 0, totalValueKobo: 0, netGainKobo: 0 };
+    const total = { investedKobo: 0, costsKobo: 0, incomeKobo: 0, proceedsKobo: 0, repaidKobo: 0, valueKobo: 0, totalValueKobo: 0, netGainKobo: 0 };
     const count = { active: 0, closed: 0 }, errors = [];
     for (const it of items) {
       if (it.error) { errors.push({ investmentId: it.investment.id, ...it.error }); continue; }

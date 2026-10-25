@@ -8,6 +8,7 @@ export const ENTRY_CHOICES = [
   ['cost', 'A cost', 'Fees, repairs, taxes, service charges.'],
   ['income', 'Income received', 'Rent or other income that reached you.'],
   ['payout', 'A payout received', 'A share-out from a business or partnership.'],
+  ['repayment', 'A loan repayment', 'Money paid back to you on a loan you gave. It reduces what you are still owed.'],
   ['proceeds', 'Sale proceeds', 'Money you received from selling all or part of it.'],
 ];
 

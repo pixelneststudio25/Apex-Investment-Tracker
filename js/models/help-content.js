@@ -45,7 +45,7 @@ export const SAMPLE_INVESTMENTS = Object.freeze({
 
 // The ledger words used by the mock-ups. They match the Ledger tab in js/ui/workspace.js.
 export const LEDGER_KINDS = Object.freeze({
-  capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1],
+  capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1], repayment: ['Loan repayment', 1],
 });
 
 export const HELP_HOME = Object.freeze({
@@ -138,7 +138,7 @@ export const TOPICS = Object.freeze([
     ],
     tryIt: { label: 'Add an entry', record: 'entry', fallbackLabel: 'Add an investment first', fallbackNote: 'Entries belong to an investment. Add one first, or try the sample portfolio.' },
     goodToKnow: 'Rent that is due is not rent that has arrived. If a tenant is late, simply leave it unrecorded until the money reaches you.',
-    glossary: ['ledger', 'regular-payment', 'payout', 'proceeds', 'invested', 'thrift'], faq: ['rent-missing', 'thrift'],
+    glossary: ['ledger', 'regular-payment', 'payout', 'proceeds', 'invested', 'thrift'], faq: ['rent-missing', 'loan-repay', 'edit-saved', 'thrift'],
     sample: { key: 'car', text: 'The Toyota Camry in the sample portfolio is rented monthly and has two months left unpaid, so you can see how a gap looks.' },
     keywords: 'rent income cost expense ledger entry payout service charge repairs',
   },
@@ -279,6 +279,10 @@ export const GLOSSARY = Object.freeze([
 
 // ---------- frequently asked questions ----------
 export const FAQ = Object.freeze([
+  { id: 'loan-repay', find: 'loan given repayment repaid paid back owed balance interest', q: 'How do I record money a borrower paid back?', topic: 'income-costs',
+    a: 'Open the loan, choose Add entry, and pick A loan repayment. Apex takes it off what you are still owed and keeps counting interest only on the rest, so the repayment is never counted twice. Your gain is the interest you have earned. If you would rather type the balance yourself, add a valuation with what is still owed; repayments then still count as money you received.' },
+  { id: 'edit-saved', find: 'edit change wrong mistake name rate date saved investment fix', q: 'Can I fix something I already saved?', topic: 'income-costs',
+    a: 'Yes. Open the investment and choose Edit to change its name, dates, rates and details. Tap any ledger entry or valuation to change or delete it. Every change is kept: open Change history on the Details tab to see earlier versions and restore one. Anything you delete stays in Settings under Recently deleted until you bring it back.' },
   { id: 'rent-missing', find: 'rent income received not showing missing upcoming recorded', q: 'Why does my rent not show as received?', topic: 'income-costs',
     a: 'A regular payment only tells Apex when money is expected. It appears under Coming up on Home until you record it. Open the investment, choose Add entry, pick Income received, and enter the date and amount when the rent actually reaches you. When you set up a new investment you can also tick the box that records payments already due as received.' },
   { id: 'lose-key', find: 'lost forgot recovery key password locked out', q: 'What if I lose my recovery key?', topic: 'privacy',

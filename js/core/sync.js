@@ -117,6 +117,12 @@ export function createSync({
     status: () => snap,
     subscribe(fn) { listeners.add(fn); fn(snap); return () => listeners.delete(fn); },
     run, flush: run,
+    // Brings in the old versions of one record held by the server, so its change history is complete on this device.
+    async pullHistory(recordId) {
+      if (!online()) throw new SyncError('OFFLINE', 'You are offline.');
+      const store = await getStore();
+      return store.sync.applyHistory(await remote.getHistory(recordId));
+    },
     // Resolves when no cycle is running (used before closing the local database).
     async whenIdle() { while (current) { try { await current; } catch { /* a failed cycle is already reported in the status */ } } },
     // A local change happened: back up shortly (changes made close together go in one cycle).

@@ -6,7 +6,7 @@ import { dayNumber } from '../engine/dates.js';
 
 export const RECORD_SCHEMA_VERSION = 1;
 export const TYPES = ['settings', 'categoryTemplate', 'investment', 'entry', 'schedule', 'valuation', 'partner', 'ownership', 'document', 'reminder'];
-export const ENTRY_KINDS = ['capital_in', 'cost', 'income', 'payout', 'proceeds'];
+export const ENTRY_KINDS = ['capital_in', 'cost', 'income', 'payout', 'proceeds', 'repayment'];
 export const VALUE_CHANGES = ['none', 'appreciation', 'depreciation', 'interest', 'manualOnly'];
 export const INCOME_MODES = ['none', 'schedule', 'irregular'];
 export const OWNERSHIP_MODES = ['sole', 'shared'];

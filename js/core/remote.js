@@ -42,6 +42,9 @@ export function createRemote({ supabase, getUserId }) {
       must(await supabase.from('record_history').upsert(rows.map((r) => ({ ...r, user_id: getUserId() })), { onConflict: 'user_id,record_id,version', ignoreDuplicates: true }));
     }),
 
+    // Every old version the server holds for one record (for the change history on a device that did not make them).
+    getHistory: (recordId) => call(async () => must(await supabase.from('record_history').select('record_id,version,payload,saved_at').eq('record_id', recordId).order('version', { ascending: true }))),
+
     // id and version of every record the server holds (for "verify my backup").
     listVersions: () => call(async () => {
       const out = [];

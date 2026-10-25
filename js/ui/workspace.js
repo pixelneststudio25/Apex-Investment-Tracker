@@ -18,9 +18,11 @@ import { recordFormView } from './forms.js';
 import { isPaletteOpen, openPalette } from './palette.js';
 import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip, syncPanel } from './sync-ui.js';
+import { manageView } from './manage-views.js';
+import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
-const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1] };
+const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1], repayment: ['Loan repayment', 1] };
 const SOURCE = { own_estimate: 'your own estimate', agent: 'an agent', comparable_sale: 'a comparable sale', bank: 'a bank', other: 'another source' };
 const VALUE_CHANGE = { none: 'No change in value', appreciation: 'Grows in value', depreciation: 'Loses value', interest: 'Earns interest', manualOnly: 'Valued by hand' };
 const pctShort = (f) => pct(f).replace(/\.?0+%$/, '%');
@@ -342,7 +344,7 @@ export function mountWorkspace({ data, email, actions }) {
       growth,
       h('dl', { class: 'statement-line' },
         stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
-        stat('Sold for', amt(sum.proceedsKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
+        stat('Sold or repaid', amt(sum.proceedsKobo + sum.repaidKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
 
     // allocation by category
     const byCat = new Map();
@@ -364,7 +366,7 @@ export function mountWorkspace({ data, email, actions }) {
     }
 
     // coming up
-    const comingPanel = h('section', { class: 'panel' }, sectionHead('Coming up'),
+    const comingPanel = h('section', { class: 'panel' }, sectionHead('Coming up', h('a', { class: 'link-btn', href: '#/reminders' }, 'Reminders')),
       up.length ? h('ul', { class: 'rows' }, up.slice(0, 6).map((u) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${u.investmentId}` },
         h('span', { class: `date-col${u.overdue ? ' overdue' : ''}` }, fmtDate(u.date)),
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, u.title), u.investmentName && h('div', { class: 'row-sub' }, u.investmentName)),
@@ -475,19 +477,22 @@ export function mountWorkspace({ data, email, actions }) {
     const working = h('details', { class: 'working' }, h('summary', {}, 'How this is calculated'), h('ul', {},
       h('li', {}, `Days are actual calendar days, counted from the first money put in to ${closed ? 'the closing date' : 'today'}. Years are days divided by 365.`),
       h('li', {}, m.valueSource === 'valuation' ? 'Worth is your latest valuation, used exactly as entered.' : m.valueSource === 'assumed' ? 'Worth is the money put in, grown or reduced by the rates under Details, over the actual days.' : closed ? 'Worth is the sale proceeds you recorded.' : 'Worth is what you paid, because no valuation or rate is set.'),
-      h('li', {}, `Net gain = ${money(m.totalValueKobo, { compact: false })} (worth or proceeds) + ${money(m.incomeKobo, { compact: false })} (income) − ${money(m.investedKobo, { compact: false })} (invested) − ${money(m.costsKobo, { compact: false })} (costs) = ${money(m.netGainKobo, { compact: false })}.`),
+      h('li', {}, `Net gain = ${money(m.totalValueKobo, { compact: false })} (worth, sale proceeds and loan repayments) + ${money(m.incomeKobo, { compact: false })} (income) − ${money(m.investedKobo, { compact: false })} (invested) − ${money(m.costsKobo, { compact: false })} (costs) = ${money(m.netGainKobo, { compact: false })}.`),
       h('li', {}, `Return on investment = net gain ÷ (invested + costs) = ${pct(m.roi)}.`),
       ann.method === 'cagr' && h('li', {}, 'Annualized return (CAGR) is the yearly rate that turns the money invested into the final value over the days held.'),
       ann.method === 'xirr' && h('li', {}, 'Annualized return (XIRR) is the yearly rate at which every dated payment in and out balances to zero.')),
       h('p', { class: 'working-more' }, helpLink('numbers', 'Reading your numbers, with a worked example')));
 
+    const due = b.schedules.filter((x) => x.status === 'active' && !closed).reduce((n, x) => n + dueUnrecorded(x, b.entries, asOf).length, 0);
+    const reminders = b.reminders.filter((r) => !r.done).sort((x, y) => (x.dueDate < y.dueDate ? -1 : 1));
     // tabs
     const panels = {};
-    panels.overview = () => h('div', { class: 'flow' }, returns,
+    panels.overview = () => h('div', { class: 'flow' }, due > 0 && h('a', { class: 'note-box note-box--link', href: `#/investments/${inv.id}/schedule` }, `${plural(due, 'regular payment is', 'regular payments are')} due and not in your ledger yet. Record ${due === 1 ? 'it' : 'them'}.`), returns,
       b.valuations.length > 0 && h('section', {}, sectionHead('Valuations'), h('ul', { class: 'rows' }, [...b.valuations].reverse().map((v) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/valuation/${v.id}` },
         h('span', { class: 'date-col' }, fmtDate(v.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, `By ${SOURCE[v.source]}`), v.note && h('div', { class: 'row-sub' }, v.note)),
         h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(v.valueKobo)))))))),
-      b.schedules.length > 0 && h('section', {}, sectionHead('Regular payments'), h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
+      (b.schedules.length > 0 || (!closed && inv.behaviors.income !== 'none')) && h('section', {}, sectionHead('Regular payments', h('a', { class: 'link-btn', href: `#/investments/${inv.id}/schedule${b.schedules.length ? '' : '/new'}` }, b.schedules.length ? 'Manage' : 'Add one')), b.schedules.length > 0 && h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/schedule/${s.id}` }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
+      h('section', {}, sectionHead('Reminders', h('a', { class: 'link-btn', href: `#/reminders/new/${inv.id}` }, 'Add')), reminders.length ? h('ul', { class: 'rows' }, reminders.map((r) => h('li', {}, h('a', { class: 'row-line', href: `#/reminders/${r.id}` }, h('span', { class: `date-col${r.dueDate < asOf ? ' overdue' : ''}` }, fmtDate(r.dueDate)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, r.text)))))) : h('p', { class: 'sub' }, 'No reminders for this investment.')),
       working);
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
       h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
@@ -497,7 +502,7 @@ export function mountWorkspace({ data, email, actions }) {
     panels.people = () => {
       const name = (pid) => (pid === 'me' ? 'You' : b.partners.find((p) => p.id === pid)?.name || 'Partner');
       const mine = partners.partners.find((p) => p.partnerId === 'me');
-      return h('div', { class: 'flow' }, h('div', { class: 'scroll-x' }, h('table', { class: 'table' },
+      return h('div', { class: 'flow' }, h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${inv.id}/shares` }, 'Change who shares it')), h('div', { class: 'scroll-x' }, h('table', { class: 'table' },
         h('thead', {}, h('tr', {}, ['Who', 'Put in', 'Share', 'Worth', 'Income', 'Net gain'].map((t) => h('th', { scope: 'col' }, t)))),
         h('tbody', {}, partners.partners.map((p) => h('tr', {}, h('td', {}, name(p.partnerId)), h('td', {}, amt(p.contributionKobo)), h('td', {}, pct(p.ownershipBp / 10000, { dp: 0 })),
           h('td', {}, amt(p.valueShareKobo)), h('td', {}, amt(p.incomeShareKobo)), h('td', { class: tone(p.netGainKobo) }, amt(p.netGainKobo, { sign: true }))))))),
@@ -510,7 +515,7 @@ export function mountWorkspace({ data, email, actions }) {
         ...inv.rates.map((rt, i) => [i === 0 ? 'Rates' : '', rateSentence(inv, rt)]),
         ...Object.entries(inv.customFields).map(([k, v]) => [defs.find((d) => d.key === k)?.label || k, v == null ? '' : String(v)]),
       ].filter(Boolean);
-      return h('div', { class: 'flow' }, h('dl', { class: 'defs' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
+      return h('div', { class: 'flow' }, h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${inv.id}/edit` }, 'Edit details'), h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${inv.id}/history` }, 'Change history')), h('dl', { class: 'defs' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
         inv.notes && h('section', {}, sectionHead('Notes'), h('p', { class: 'prose' }, inv.notes)),
         h('section', {}, sectionHead('Delete'), h('p', { class: 'sub' }, 'Deleting hides this investment and everything recorded under it. You can undo it straight afterwards.'),
           h('div', { class: 'row row--actions' }, h('button', { class: 'btn btn--secondary btn--danger', type: 'button', onclick: () => deleteInvestment(ctx, inv) }, 'Delete this investment'))));
@@ -524,7 +529,7 @@ export function mountWorkspace({ data, email, actions }) {
     indicator(tabs, '[aria-selected="true"]');
     const actionsRow = h('div', { class: 'row row--actions' }, closed
       ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => reopen(ctx, inv.id) }, 'Reopen this investment')
-      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close')]);
+      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/edit` }, 'Edit')]);
     return h('div', { class: 'flow' }, h('a', { class: 'back', href: '#/investments' }, icon('chevronLeft', { size: 18 }), 'Investments'), head, actionsRow, tabs, body);
   }
 
@@ -590,6 +595,8 @@ export function mountWorkspace({ data, email, actions }) {
             h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn)),
         h('div', { class: 'settings-col' },
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Your records'), h('p', { class: 'sub' }, 'Reminders you have set, and anything you deleted that can still be brought back.'),
+            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/reminders' }, 'Reminders'), h('a', { class: 'btn btn--secondary', href: '#/deleted' }, 'Recently deleted'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
             h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
           actions.sync && syncPanel({ sync: actions.sync, toast, actions }),
@@ -638,6 +645,8 @@ export function mountWorkspace({ data, email, actions }) {
       dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render(); else go('#/'); }, 'getting started onboarding'),
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
+      cmd('Go to', 'Reminders', 'calendar', () => go('#/reminders'), 'dates due remind tax lease'),
+      cmd('Go to', 'Recently deleted', 'undo', () => go('#/deleted'), 'restore trash bin removed'),
       cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
       cmd('Go to', 'How to use Apex', 'book', () => go(HELP_ROUTE.home), 'help guide tutorial learn start glossary questions faq'),
     ].filter(Boolean);
@@ -665,10 +674,10 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' || page === 'help' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
-    root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3));
+    root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2));
     outlet.setAttribute('aria-busy', 'true');
     // The skeleton only appears if loading takes a moment, so quick pages do not flash.
     const wait = setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
@@ -677,6 +686,7 @@ export function mountWorkspace({ data, email, actions }) {
       ctxCache = ctx;
       let view;
       if (page === 'new') view = await newView(ctx);
+      else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);

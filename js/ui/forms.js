@@ -64,7 +64,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       const data = buildEntry(form, invId);
       if (editing) { const { investmentId, ...change } = data; await store.update(recordId, change); } else await store.create('entry', data);
     }, editing ? 'Entry updated.' : 'Entry added.');
-    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && removeWithUndo(recordId, 'Entry'));
+    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && removeWithUndo(recordId, 'Entry'), editing && h('p', { class: 'sub' }, h('a', { href: `#/investments/${invId}/history/${recordId}` }, 'See the change history of this entry')));
   }
 
   // ---------- valuation ----------
@@ -81,7 +81,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       const data = buildValuation(form, invId);
       if (editing) { const { investmentId, ...change } = data; await store.update(recordId, change); } else await store.create('valuation', data);
     }, editing ? 'Valuation updated.' : 'Valuation added.');
-    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit valuation' : 'Add a valuation'), f, editing && removeWithUndo(recordId, 'Valuation'));
+    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit valuation' : 'Add a valuation'), f, editing && removeWithUndo(recordId, 'Valuation'), editing && h('p', { class: 'sub' }, h('a', { href: `#/investments/${invId}/history/${recordId}` }, 'See the change history of this valuation')));
   }
 
   // ---------- close ----------

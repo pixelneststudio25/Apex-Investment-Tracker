@@ -158,7 +158,7 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
       const row = await backend.get('records', id);
       if (!row) throw new StoreError('NOT_FOUND', 'Record not found.');
       const current = await open(row, k);
-      const old = await backend.getAll('history', 'recordId', id);
+      const old = (await backend.getAll('history', 'recordId', id)).filter((x) => x.version < row.version);
       const versions = [];
       for (const h of old) {
         try { versions.push({ version: h.version, savedAt: h.savedAt, current: false, record: { id, version: h.version, ...(await decryptRecord(k, userId, id, h.payload)) } }); }
@@ -286,6 +286,21 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
           const row = await backend.get('records', id);
           if (!row) return;
           await backend.commit([{ store: 'records', put: { ...row, dirty: 1, syncedVersion: 0 } }], { expect: { id, version: row.version } });
+        });
+      },
+
+      // Old versions held by the server (shape: record_id, version, payload, saved_at), for a device that never made them.
+      applyHistory(rows) {
+        return serial(async () => {
+          key(); let added = 0;
+          for (const r of rows) {
+            if (!r || typeof r.record_id !== 'string' || !Number.isInteger(r.version) || typeof r.payload !== 'string') continue;
+            const hk = `${r.record_id}:${r.version}`;
+            if (await backend.get('history', hk)) continue;
+            await backend.commit([{ store: 'history', put: { key: hk, recordId: r.record_id, userId, version: r.version, payload: r.payload, savedAt: r.saved_at, pushed: 1 } }]);
+            added++;
+          }
+          return { added };
         });
       },
 
