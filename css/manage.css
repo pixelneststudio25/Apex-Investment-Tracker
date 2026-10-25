@@ -14,3 +14,9 @@
 .diff li { padding-left: var(--space-3); border-left: 2px solid var(--border); overflow-wrap: anywhere; }
 
 .settings .panel .row > .btn { flex: 0 1 auto; }
+
+/* Links inside sentences (for example "See the change history..."). Without this the browser's default blue and
+   purple show through. Links that have their own class (buttons, rows, tabs) are not touched. */
+.flow a:not([class]), .flow a:not([class]):visited { color: var(--accent); font-weight: 500; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 0.2em; }
+@media (hover: hover) { .flow a:not([class]):hover { color: var(--accent-strong); text-decoration-thickness: 2px; } }
+.flow a:not([class]):active { color: var(--accent-strong); }
