@@ -18,13 +18,15 @@ export class StoreError extends Error {
 
 const out = (o) => structuredClone(o);
 
-export function createStore({ backend, getDek, userId, now = () => new Date().toISOString(), uuid = () => globalThis.crypto.randomUUID() }) {
+export function createStore({ backend, getDek, userId, now = () => new Date().toISOString(), uuid = () => globalThis.crypto.randomUUID(), onWrite = null }) {
   const cache = new Map();  // id -> { version, obj }; plaintext, in memory only, cleared when the key changes
   const problems = new Map(); // id -> code, for records that could not be read
   let cacheKey = null;
   let lastStamp = '';
   // Strictly increasing creation times, so records made within the same millisecond keep their order.
   const stamp = () => { let t = now(); if (t <= lastStamp) t = new Date(Date.parse(lastStamp) + 1).toISOString(); lastStamp = t; return t; };
+  // Called after every local change so the sync engine knows there is something to back up. It can never break a save.
+  const wrote = () => { try { onWrite?.(); } catch { /* ignore */ } };
   let chain = Promise.resolve();
   const serial = (fn) => { const run = chain.then(() => fn()); chain = run.catch(() => {}); return run; };
 
@@ -64,6 +66,7 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
     ], { expect: { id: row.id, version: row.version } });
     const full = { id: row.id, version, ...obj };
     cache.set(row.id, { version, obj: full });
+    wrote();
     return full;
   }
 
@@ -105,6 +108,7 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
         } catch (e) { throw e.code === 'CONFLICT' ? new StoreError('EXISTS', 'A record with this id already exists.') : e; }
         const full = { id, version: 1, ...obj };
         cache.set(id, { version: 1, obj: full });
+        wrote();
         return out(full);
       });
     },
@@ -182,13 +186,15 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
       const [records, history] = await Promise.all([backend.getAll('records', 'dirty', 1), backend.getAll('history', 'pushed', 0)]);
       return { records, history, count: records.length + history.length };
     },
-    // Marks rows as pushed. A record edited while the push was running stays dirty (its version moved on).
+    // Marks rows as pushed. A record edited while the push was running stays dirty (its version moved on), but it
+    // still remembers which version the server now has (`syncedVersion`), so the next push knows what to expect.
     markPushed({ records = [], history = [] } = {}) {
       return serial(async () => {
         for (const { id, version } of records) {
           const row = await backend.get('records', id);
-          if (!row || row.version !== version || !row.dirty) continue;
-          try { await backend.commit([{ store: 'records', put: { ...row, dirty: 0 } }], { expect: { id, version } }); }
+          if (!row) continue;
+          const next = row.version === version ? { ...row, dirty: 0, syncedVersion: version } : { ...row, syncedVersion: Math.max(row.syncedVersion || 0, version) };
+          try { await backend.commit([{ store: 'records', put: next }], { expect: { id, version: row.version } }); }
           catch (e) { if (e.code !== 'CONFLICT') throw e; }
         }
         for (const hkey of history) {
@@ -196,6 +202,119 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
           if (h && !h.pushed) await backend.commit([{ store: 'history', put: { ...h, pushed: 1 } }]);
         }
       });
+    },
+
+    // ---------- sync (Phase 5) ----------
+    // Everything below handles ciphertext rows and bookkeeping. `syncedVersion` is the last version known to
+    // be on the server (0 = never pushed). Conflicts keep BOTH sides: nothing a person saved is ever dropped.
+    sync: {
+      async dirtyRecords() { key(); return backend.getAll('records', 'dirty', 1); },
+      async dirtyHistory() { key(); return backend.getAll('history', 'pushed', 0); },
+      async allRows() { key(); return backend.getAll('records'); },
+
+      // Rows that came from the server (shape: id, payload, schema_version, version, created_at, updated_at, deleted_at).
+      // New or newer rows are stored as they are. A row that this device also changed is returned in `conflicts`.
+      applyRemote(rows) {
+        return serial(async () => {
+          key();
+          const res = { added: 0, updated: 0, skipped: 0, conflicts: [] };
+          for (const R of rows) {
+            if (!R || typeof R.id !== 'string' || typeof R.payload !== 'string' || !Number.isInteger(R.version) || R.version < 1) { res.skipped++; continue; }
+            const base = { id: R.id, userId, payload: R.payload, schemaVersion: R.schema_version, version: R.version, createdAt: R.created_at, updatedAt: R.updated_at, deletedAt: R.deleted_at ?? null, dirty: 0, syncedVersion: R.version };
+            try {
+              const local = await backend.get('records', R.id);
+              if (!local) { await backend.commit([{ store: 'records', put: base }], { expect: { id: R.id, version: null } }); res.added++; continue; }
+              if (!local.dirty) {
+                if (R.version > local.version) { await backend.commit([{ store: 'records', put: base }], { expect: { id: R.id, version: local.version } }); res.updated++; } else res.skipped++;
+                continue;
+              }
+              if (R.version <= (local.syncedVersion || 0)) { res.skipped++; continue; }                 // nothing new on the server
+              if (R.version === local.version && R.payload === local.payload) {                         // our own push, reply was lost
+                await backend.commit([{ store: 'records', put: { ...local, dirty: 0, syncedVersion: R.version } }], { expect: { id: R.id, version: local.version } }); res.skipped++; continue;
+              }
+              res.conflicts.push(R);
+            } catch (e) { if (e.code === 'CONFLICT') { res.skipped++; continue; } throw e; }            // a local save raced us: next round looks again
+          }
+          if (res.added || res.updated) wrote();
+          return res;
+        });
+      },
+
+      // Both sides changed the same record. The newer change (by the time saved inside the record) becomes the
+      // current version; the other side is kept as a version in history. Local edits made while offline are kept
+      // in order. The result is saved as new local versions on top of the server's, and is pushed next.
+      resolveConflict(R) {
+        return serial(async () => {
+          const k = key(), id = R.id;
+          const local = await backend.get('records', id);
+          if (!local) throw new StoreError('NOT_FOUND', 'Record not found.');
+          const b = local.syncedVersion || 0;
+          if (R.version <= b) return { winner: 'local', changed: false };
+          let lo, so;
+          try { lo = await decryptRecord(k, userId, id, local.payload); so = await decryptRecord(k, userId, id, R.payload); }
+          catch { throw new StoreError('CORRUPT', 'Two copies of a record could not be merged because one could not be read.'); }
+          const S = R.version, ops = [], branch = [];
+          for (let v = b + 1; v < local.version; v++) {              // the versions made on this device since the last sync
+            const hk = `${id}:${v}`, h = await backend.get('history', hk);
+            ops.push({ store: 'history', delete: hk });
+            if (h) branch.push(h.payload);
+          }
+          branch.push(local.payload);
+          const m = branch.length, localWins = (Date.parse(lo.updatedAt) || 0) > (Date.parse(so.updatedAt) || 0);
+          const hist = (version, payload, savedAt) => ({ store: 'history', put: { key: `${id}:${version}`, recordId: id, userId, version, payload, savedAt, pushed: 0 } });
+          ops.push(hist(S, R.payload, R.updated_at));
+          let cur;
+          if (localWins) {
+            for (let i = 0; i < m - 1; i++) ops.push(hist(S + 1 + i, branch[i], local.updatedAt));
+            cur = { payload: branch[m - 1], version: S + m, schemaVersion: local.schemaVersion, deletedAt: local.deletedAt ?? null };
+          } else {
+            for (let i = 0; i < m; i++) ops.push(hist(S + 1 + i, branch[i], local.updatedAt));
+            cur = { payload: R.payload, version: S + m + 1, schemaVersion: R.schema_version, deletedAt: R.deleted_at ?? null };
+          }
+          const t = now(), ts = Date.parse(t) < Date.parse(local.updatedAt) ? local.updatedAt : t;
+          ops.push({ store: 'records', put: { ...local, ...cur, updatedAt: ts, dirty: 1, syncedVersion: S } });
+          await backend.commit(ops, { expect: { id, version: local.version } });
+          cache.delete(id);
+          wrote();
+          return { winner: localWins ? 'local' : 'remote', changed: true };
+        });
+      },
+
+      // The server no longer has a record this device thought it had: push it again as a new record.
+      forgetServerVersion(id) {
+        return serial(async () => {
+          const row = await backend.get('records', id);
+          if (!row) return;
+          await backend.commit([{ store: 'records', put: { ...row, dirty: 1, syncedVersion: 0 } }], { expect: { id, version: row.version } });
+        });
+      },
+
+      // Backup file support: the rows exactly as stored (ciphertext only).
+      async exportRows() { key(); return { records: await backend.getAll('records'), history: await backend.getAll('history') }; },
+      importRows({ records = [], history = [] }) {
+        return serial(async () => {
+          key();
+          const res = { added: 0, updated: 0, skipped: 0, historyAdded: 0 };
+          for (const r of records) {
+            const local = await backend.get('records', r.id);
+            const row = { id: r.id, userId, payload: r.payload, schemaVersion: r.schemaVersion, version: r.version, createdAt: r.createdAt, updatedAt: r.updatedAt, deletedAt: r.deletedAt ?? null, dirty: 1, syncedVersion: local?.syncedVersion || 0 };
+            try {
+              if (!local) { await backend.commit([{ store: 'records', put: row }], { expect: { id: r.id, version: null } }); res.added++; }
+              else if (r.version > local.version && !local.dirty) { await backend.commit([{ store: 'records', put: row }], { expect: { id: r.id, version: local.version } }); res.updated++; }
+              else res.skipped++;
+            } catch (e) { if (e.code === 'CONFLICT') res.skipped++; else throw e; }
+          }
+          for (const h of history) {
+            const hk = `${h.recordId}:${h.version}`;
+            if (await backend.get('history', hk)) continue;
+            await backend.commit([{ store: 'history', put: { key: hk, recordId: h.recordId, userId, version: h.version, payload: h.payload, savedAt: h.savedAt, pushed: 0 } }]);
+            res.historyAdded++;
+          }
+          if (res.added || res.updated) cache.clear();
+          wrote();
+          return res;
+        });
+      },
     },
     meta: {
       get: async (name) => (await backend.get('meta', name))?.value,

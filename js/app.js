@@ -3,6 +3,10 @@ import { createIdleLock } from './core/idle.js';
 import { kv } from './core/kv.js';
 import { createSupabase } from './core/supabase.js';
 import { createVault } from './core/vault.js';
+import { createRemote } from './core/remote.js';
+import { createSync } from './core/sync.js';
+import { createBackup, restoreBackup } from './core/backup.js';
+import { confirmDialog } from './ui/dialog.js';
 import { ceremonyView, checkKeyView, forgotView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
 import { pinSetupView, pinUnlockView } from './ui/pin-views.js';
 import { mountWorkspace } from './ui/workspace.js';
@@ -26,10 +30,13 @@ const show = (node, { workspace = false, wide = false } = {}) => {
   enter(node);
 };
 
-let auth, vault;
+let auth, vault, sync, notifyWrite = () => {};
 try {
-  auth = createAuth({ supabase: createSupabase(), kv, redirectTo: location.origin + '/' });
-  vault = createVault({ auth });
+  const supabase = createSupabase();
+  auth = createAuth({ supabase, kv, redirectTo: location.origin + '/' });
+  vault = createVault({ auth, onWrite: () => notifyWrite() }); // every local save asks the sync engine to back up shortly after
+  sync = createSync({ getStore: () => vault.store(), remote: createRemote({ supabase, getUserId: () => auth.state.userId }), canRun: () => auth.isUnlocked() });
+  notifyWrite = () => sync.touch();
 } catch {
   app.textContent = 'Apex could not start. Please reload the page.';
   throw new Error('init failed');
@@ -41,7 +48,7 @@ const idle = createIdleLock({ ms: 120000, onLock: () => lockNow() });
 document.addEventListener('visibilitychange', () => (document.hidden ? idle.hidden() : idle.visible()));
 
 // ---------- flows ----------
-const enterApp = () => { idle.start(); unlockMoment(); showHome(); };
+const enterApp = () => { idle.start(); sync.start(); unlockMoment(); showHome(); };
 
 async function afterUnlock() { // after password login or recovery
   const rec = await auth.pinInfo();
@@ -49,7 +56,8 @@ async function afterUnlock() { // after password login or recovery
 }
 
 async function lockNow() {
-  idle.stop(); auth.lock();
+  idle.stop(); sync.stop(); auth.lock();
+  await sync.whenIdle(); // a backup that was already running stops as soon as it finds the vault locked
   await vault.close(); // decrypted records leave memory right away
   await showLocked();
 }
@@ -132,6 +140,40 @@ const showCheckKey = () => show(checkKeyView({
   onBack: showHome,
 }));
 
+// Signing out keeps this device's encrypted copy (so unsynced work is never lost), but it first tries to back up
+// and warns if anything could not be.
+async function signOut() {
+  idle.stop();
+  try { await sync.flush(); } catch { /* the question below covers it */ }
+  let left = 0; try { left = (await (await vault.store()).pending()).count; } catch { /* locked */ }
+  if (left > 0) {
+    const yes = await confirmDialog({ title: 'Some changes are not backed up', body: `${left} ${left === 1 ? 'change has' : 'changes have'} not reached the server yet. Signing out keeps ${left === 1 ? 'it' : 'them'} safe on this device, but if this device is lost they are lost with it. Sign out anyway?`, confirmLabel: 'Sign out anyway', danger: true });
+    if (!yes) { idle.start(); return; }
+  }
+  sync.stop(); await sync.whenIdle();
+  await vault.close(); await auth.signOut(); showWelcome();
+}
+
+// "Remove my data from this device": backs up first, checks the server really has everything, then deletes the
+// local copy and signs out. If it cannot be sure, it says exactly why and asks again.
+async function wipeThisDevice() {
+  const first = await confirmDialog({ title: 'Remove my data from this device?', body: 'This deletes the copy of your records stored in this browser and signs you out. Your backed-up records stay online, and sign-in brings everything back.', confirmLabel: 'Continue', danger: true });
+  if (!first) return;
+  idle.stop();
+  let problem = null;
+  try {
+    await sync.flush();
+    const v = await sync.verify();
+    if (v.notBackedUp > 0 || v.historyPending > 0) problem = `${v.notBackedUp} ${v.notBackedUp === 1 ? 'record is' : 'records are'} not backed up${v.historyPending ? `, and ${v.historyPending} old ${v.historyPending === 1 ? 'version is' : 'versions are'} still waiting` : ''}.`;
+  } catch (e) { problem = e.code === 'OFFLINE' ? 'You are offline, so Apex cannot confirm that everything is backed up.' : 'Apex could not confirm that everything is backed up.'; }
+  if (problem) {
+    const yes = await confirmDialog({ title: 'Not everything is backed up', body: `${problem} If you remove this device's data now, anything not backed up is lost for good. You can download a backup file in Settings first.`, confirmLabel: 'Remove anyway', danger: true });
+    if (!yes) { idle.start(); return; }
+  }
+  sync.stop(); await sync.whenIdle();
+  await vault.wipe(); await auth.signOut(); showWelcome();
+}
+
 function showHome() {
   show(mountWorkspace({
     data: vault,
@@ -145,7 +187,11 @@ function showHome() {
     },
     onSetPin: showSetPin,
     hasPin: async () => { const r = await auth.pinInfo(); return !!r && r.userId === auth.state.userId; },
-    onSignOut: async () => { idle.stop(); await vault.close(); await auth.signOut(); showWelcome(); },
+    sync,
+    exportBackup: async () => createBackup(await vault.store(), { userId: auth.state.userId }),
+    importBackup: async (text) => restoreBackup(await vault.store(), text, { userId: auth.state.userId }),
+    onSignOut: signOut,
+    onWipe: wipeThisDevice,
     },
   }), { workspace: true });
 }

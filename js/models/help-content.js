@@ -221,7 +221,7 @@ export const TOPICS = Object.freeze([
       { title: 'Keep your recovery key safe', text: 'It was shown once at signup. Apex keeps no copy. Store it somewhere you will find in years, such as a printout or a password manager.' },
       { title: 'Check the key', text: 'Choose Check my recovery key in Settings, and enter the key you saved. Apex tells you if it opens your data. It changes nothing.' },
       { title: 'Hide amounts in public', text: 'Tap the eye at the top, or search for Hide amounts. Naira figures blur while percentages stay visible, which is handy on a bus or at a meeting.' },
-      { title: 'Know what stays on your device', text: 'For now, every record is stored encrypted on this device only. Syncing between devices arrives in a later update, so your recovery key matters even more.' },
+      { title: 'Know where your records are', text: 'Records are encrypted on this device and a locked copy is backed up online, so you can open Apex on another device. Check the status at the top of the screen, or open Settings and choose Check my backup. Your recovery key still matters: it is the only way back in if you forget your password.' },
     ],
     tryIt: { label: 'Open Settings', route: '#/settings' },
     goodToKnow: 'Create a new recovery key from Settings if you ever think the old one has been seen. The new one replaces it straight away, so save it at once.',
@@ -294,7 +294,7 @@ export const FAQ = Object.freeze([
   { id: 'pin-removed', find: 'pin wrong tries removed unlock', q: 'Why did my PIN stop working?', topic: 'privacy',
     a: 'After 5 wrong tries Apex removes the PIN from the device to protect your records. Sign in with your email and password, then choose Set or change PIN in Settings to create a new one.' },
   { id: 'other-device', find: 'sync another phone laptop device backup', q: 'Can I open my records on another phone or laptop?', topic: 'privacy',
-    a: 'Not yet. For now your records are saved, encrypted, on this device only. Syncing between devices will arrive in a later update. Until then, keep your recovery key safe.' },
+    a: 'Yes. Sign in with your email and password on the other device and your records appear there, usually within a few seconds. Apex keeps an encrypted copy online that only your password or recovery key can open. If a device is offline, changes wait on it and are backed up when it reconnects.' },
   { id: 'deleted-by-mistake', find: 'deleted undo restore bring back recover delete', q: 'I deleted something by mistake. Can I get it back?', topic: 'closing',
     a: 'Yes, but only for a few seconds. After a delete, a message appears with Undo for about nine seconds. Tap it and everything comes back. Once it has gone, the app cannot restore it. If you only wanted to mark an investment as finished, close it instead.' },
 ]);

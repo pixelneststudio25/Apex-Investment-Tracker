@@ -1,0 +1,21 @@
+/* Backup and sync: the status chip tones and the Settings panel. Tokens come from tokens.css. */
+.chip-status[data-tone="warn"]::before { background: var(--warn); box-shadow: 0 0 0 3px color-mix(in srgb, var(--warn) 24%, transparent); }
+.chip-status[data-tone="bad"]::before { background: var(--negative); box-shadow: 0 0 0 3px color-mix(in srgb, var(--negative) 24%, transparent); }
+.chip-status[data-tone="idle"]::before { background: var(--text-muted); box-shadow: none; }
+.chip-status[data-tone="busy"]::before { background: var(--info); box-shadow: 0 0 0 3px color-mix(in srgb, var(--info) 24%, transparent); animation: sync-pulse 1.1s var(--ease-in-out) infinite; }
+@keyframes sync-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .chip-status[data-tone="busy"]::before { animation: none; } }
+
+.sync-state > * + * { margin-top: var(--space-2); }
+.sync-status { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: var(--fs-body); }
+.sync-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--text-muted); }
+.sync-dot[data-tone="ok"] { background: var(--positive); }
+.sync-dot[data-tone="warn"] { background: var(--warn); }
+.sync-dot[data-tone="bad"] { background: var(--negative); }
+.sync-dot[data-tone="busy"] { background: var(--info); }
+.sync-result { margin: 0; padding: var(--space-3) var(--space-4); border-left: 2px solid var(--positive); background: var(--surface-2); border-radius: 0 var(--radius-input) var(--radius-input) 0; font-size: var(--fs-small); }
+.sync-result[data-tone="warn"] { border-left-color: var(--warn); }
+.sync-result[data-tone="bad"] { border-left-color: var(--negative); }
+.sync-result[hidden] { display: none; }
+.settings .sync-panel .row > .btn { flex: 0 1 auto; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

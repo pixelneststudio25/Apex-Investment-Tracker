@@ -17,6 +17,7 @@ import { wizardView } from './wizard.js';
 import { recordFormView } from './forms.js';
 import { isPaletteOpen, openPalette } from './palette.js';
 import { helpLink, helpView } from './help.js';
+import { downloadText, statusChip, syncPanel } from './sync-ui.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
 const KIND = { capital_in: ['Money put in', -1], cost: ['Cost', -1], income: ['Income received', 1], payout: ['Payout received', 1], proceeds: ['Sale proceeds', 1] };
@@ -130,7 +131,7 @@ export function mountWorkspace({ data, email, actions }) {
   const lockBtn = (cls) => h('button', { class: cls, type: 'button', 'aria-label': 'Lock Apex now', title: 'Lock now', onclick: actions.onLock }, icon('lock'));
   const topbar = h('header', { class: 'topbar' }, lockup(),
     h('div', { class: 'topbar-actions' },
-      h('span', { class: 'chip-status', title: 'Your records are stored encrypted on this device. Syncing arrives in a later update.' }, 'Saved on this device'),
+      actions.sync ? statusChip(actions.sync) : h('span', { class: 'chip-status', title: 'Your records are stored encrypted on this device.' }, 'Saved on this device'),
       searchBtn, hideBtn, themeBtn, lockBtn('icon-btn')));
   root.append(
     h('aside', { class: 'ws-side' }, lockup(), h('div', { class: 'side-top' }, sideSearch, sideNav),
@@ -591,13 +592,16 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'settings-col' },
           h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
             h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
+          actions.sync && syncPanel({ sync: actions.sync, toast, actions }),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
             h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
             h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'))),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('p', { class: 'sub' }, 'Your records are saved on this device only for now. Syncing between devices arrives in a later update, so keep your recovery key safe.'),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('p', { class: 'sub' }, 'Signing out keeps your encrypted records on this device, so Apex opens quickly next time. You will still need your password or recovery key to open them. Before signing out, Apex backs up any changes it can.'),
             h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'))),
           h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Danger zone'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key'))))));
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key')),
+            h('p', { class: 'sub' }, 'Deletes the copy of your records stored in this browser and signs you out, for example on a shared computer. Apex first checks that everything is backed up online; signing in again brings it all back.'),
+            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onWipe }, 'Remove my data from this device'))))));
   }
 
   // ---------- Help ----------
@@ -629,6 +633,8 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Actions', 'Lock Apex now', 'lock', actions.onLock, 'secure'),
       cmd('Actions', 'Set or change PIN', 'key', actions.onSetPin, 'passcode unlock'),
       cmd('Actions', 'Check my recovery key', 'shield', actions.onCheckKey, 'backup'),
+      actions.sync && cmd('Actions', 'Back up now', 'check', () => actions.sync.run().then((s) => toast(s.state === 'synced' && !s.pending ? 'Backed up.' : 'Could not finish backing up. See Settings.')), 'sync save cloud online'),
+      actions.exportBackup && cmd('Actions', 'Download a backup file', 'download', async () => { try { const f = await actions.exportBackup(); downloadText(f.filename, f.text); toast('Backup file saved.'); } catch { toast('Could not create the backup file.'); } }, 'export save copy'),
       dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render(); else go('#/'); }, 'getting started onboarding'),
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
