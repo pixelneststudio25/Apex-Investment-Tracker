@@ -340,7 +340,7 @@ export function mountWorkspace({ data, email, actions }) {
     heroPlayed = true;
     const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
       h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
-      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold'),
+      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold ', h('a', { class: 'link-btn', href: '#/projections/all' }, 'Look ahead')),
       quickActions(ctx, items),
       growth,
       h('dl', { class: 'statement-line' },
@@ -650,6 +650,7 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
       cmd('Go to', 'Projections', 'chart', () => go('#/projections'), 'look ahead what if future forecast scenario'),
+      cmd('Go to', 'Whole portfolio projection', 'chart', () => go('#/projections/all'), 'look ahead what if future forecast everything total'),
       cmd('Go to', 'Export and print', 'download', () => go('#/export'), 'csv spreadsheet excel download save'),
       cmd('Go to', 'Printable statement', 'doc', () => go('#/statement'), 'print pdf report statement'),
       cmd('Go to', 'Reminders', 'calendar', () => go('#/reminders'), 'dates due remind tax lease'),

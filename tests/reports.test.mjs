@@ -11,6 +11,7 @@ import { SAMPLE_AS_OF, seedSamplePortfolio } from '../js/models/sample.js';
 import { compareScenarios } from '../js/engine/index.js';
 import { dueUnrecorded } from '../js/models/manage.js';
 import { HORIZON_YEARS, blankScenario, buildScenario, dueNotCounted, explain, expectedPayments, horizonList, parseYears, projectScenario, runProjection, scenarioFromRate, startingScenario } from '../js/models/projections.js';
+import { runPortfolioProjection, splitItems } from '../js/models/portfolio-projection.js';
 import { buildStatement, csvCell, csvName, koboPlain, ledgerCsv, loadReport, pctPlain, summaryCsv, toCsv, valuationsCsv } from '../js/models/export.js';
 
 const TODAY = '2026-04-15', USER = 'u1';
@@ -256,6 +257,54 @@ test('statement: one investment on its own, and the ledger stops at the chosen d
   eq(st.sections[0].valuations.length, 0, 'the 2025 valuation is after the date');
   eq(st.summary.investedKobo, 1800000000, 'the summary covers only that investment');
   const all = await buildStatement(pf, items, '2024-01-01'); ok(all.sections.length > 1);
+});
+
+
+// ---------- whole portfolio ----------
+async function twoInvestments(store) {
+  const a = await make(store, 'land', { name: 'Plot' }, (d) => { d.rate.percent = '12'; });           // saved rate 12% a year
+  await store.create('valuation', { investmentId: a, date: '2026-04-01', valueKobo: 1000000000, source: 'own_estimate', note: '' });
+  const b = await make(store, 'precious-metals', { name: 'Gold' }, (d) => { d.income = 'none'; });   // no saved rate
+  await store.create('valuation', { investmentId: b, date: '2026-04-01', valueKobo: 500000000, source: 'own_estimate', note: '' });
+  return { a, b };
+}
+test('portfolio: each at its own saved rate adds up by hand, and an investment with no rate is held flat and named', async () => {
+  const { store, pf } = await fresh(); const { a } = await twoInvestments(store);
+  eq((await store.get(a)).rates[0].rate, 0.12, 'the plot really has a saved 12% rate');
+  const items = await loadReport(pf, TODAY), out = runPortfolioProjection({ items, asOf: TODAY, a: null, years: [1, 3] });
+  eq(out.startKobo, 1500000000, '₦10,000,000 + ₦5,000,000');
+  eq(out.startKobo, (await pf.summary(TODAY)).valueKobo, 'the same total as Home shows today');
+  eq(out.a.rows[0].valueKobo, 1120000000 + 500000000, 'plot at 12% for 365 days = ₦11,200,000, gold flat at ₦5,000,000');
+  eq(out.a.rows[0].gainKobo, 120000000, 'gain is ₦1,200,000');
+  eq(out.flat, ['Gold'], 'named, never guessed');
+  ok(Math.abs(out.a.rows[0].annualRate - 0.08) < 1e-9, `16.2M / 15M over exactly one year is 8% a year, got ${out.a.rows[0].annualRate}`);
+  eq(out.a.rows[1].valueKobo, out.a.parts.reduce((t, p) => t + p.rows[1].valueKobo, 0), 'the total is the sum of the parts');
+  ok(out.isProjection && out.a.rows.every((r) => r.isProjection));
+});
+test('portfolio: one typed rate applies to every open investment, and two scenarios give B minus A', async () => {
+  const { store, pf } = await fresh(); await twoInvestments(store);
+  const items = await loadReport(pf, TODAY), out = runPortfolioProjection({ items, asOf: TODAY, a: sc('10'), b: sc('20'), years: [1] });
+  eq(out.a.rows[0].valueKobo, 1650000000, '₦15,000,000 at 10%'); eq(out.b.rows[0].valueKobo, 1800000000, '₦15,000,000 at 20%');
+  eq(out.diff[0].valueKobo, 150000000); eq(out.flat, [], 'nothing is held flat when one rate is typed');
+});
+test('portfolio: closed and uncalculable investments are left out, and nothing open means a clear refusal', async () => {
+  const { store, pf } = await fresh(); const { b } = await twoInvestments(store);
+  await store.update(b, { status: 'closed', closedOn: '2026-03-01' });
+  let items = await loadReport(pf, TODAY); const parts = splitItems(items);
+  eq([parts.open.length, parts.closedCount, parts.broken], [1, 1, []]);
+  eq(runPortfolioProjection({ items, asOf: TODAY, a: sc('10'), years: [1] }).startKobo, 1000000000, 'only the open plot');
+  items = [{ investment: { name: 'Broken' }, bundle: null, metrics: null, error: { message: 'x' } }];
+  throwsInput(() => runPortfolioProjection({ items, asOf: TODAY, a: sc('10'), years: [1] }), /no open investment/);
+  eq(splitItems(items).broken, ['Broken']);
+});
+test('portfolio: regular payments from every investment are added in, and can be switched off', async () => {
+  const { store, pf } = await fresh(); const { a } = await twoInvestments(store);
+  await store.create('schedule', { investmentId: a, kind: 'income', label: 'Rent', amountKobo: 10000000, frequency: 'monthly', startDate: '2026-05-01', adjustments: [], skippedDates: [] });
+  const items = await loadReport(pf, TODAY);
+  const on = runPortfolioProjection({ items, asOf: TODAY, a: sc('10'), years: [1] }).a.rows[0], off = runPortfolioProjection({ items, asOf: TODAY, a: sc('10'), years: [1], includePayments: false }).a.rows[0];
+  eq([on.incomeKobo, on.incomeCount], [12 * 10000000, 12], '1 May 2026 to 1 Apr 2027 is twelve rents of ₦100,000');
+  eq([off.incomeKobo, off.incomeCount], [0, 0]); eq(on.valueKobo, off.valueKobo, 'payments never change the worth, only the income');
+  eq(on.gainKobo - off.gainKobo, 120000000, 'gain differs by exactly the rent');
 });
 
 export async function runReportTests(log = console.log) {

@@ -257,6 +257,7 @@ export const TOPICS = Object.freeze([
     mock: { type: 'statement' },
     steps: [
       { title: 'Open Projections', text: 'Choose Look ahead on an open investment, or open Projections from Settings or from search. Closed investments have nothing left to project.' },
+      { title: 'Or look at everything at once', text: 'On the Projections page, choose Whole portfolio. Each open investment uses its own saved rate unless you type one rate for all of them. An investment with no saved rate is held at its worth today and named, never guessed. Shared investments count at their full value, the same as on Home.' },
       { title: 'Type a yearly rate', text: 'For example 12 for twelve percent a year. If the investment already has a rate, Apex fills it in as a starting answer, and you can change it. Choose whether it grows or loses value, and whether it is simple or compounded.' },
       { title: 'Compare a second scenario', text: 'Fill in Scenario B to see two rates side by side, with the difference at 1, 3, 5 and 10 years. You can add one more number of years of your own.', more: 'valuations-rates' },
       { title: 'Read the answer as a what-if', text: 'Every table is marked Projection. It starts from what the investment is worth today and assumes the rate holds every year. Regular payments you set up, such as rent, are included from tomorrow on. Payments already due but not recorded are never counted, because Apex does not assume money arrived.', more: 'income-costs' },
