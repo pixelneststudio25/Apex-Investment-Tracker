@@ -5,9 +5,13 @@
 .pin-view, .pin-pad { --pin-key: 76px; --pin-emblem: 76px; --pin-row: clamp(6px, 1.3dvh, 12px); --pin-block: clamp(14px, 2.8dvh, 28px); }
 /* The gap under the logo header was 32px, too much on this page only. */
 body:has(.pin-view) .app-header { margin-bottom: clamp(8px, 1.1dvh, 14px); }
-.pin-view--setup, .pin-view--setup .pin-pad { --pin-key: 64px; --pin-emblem: 60px; }
+.pin-view--setup, .pin-view--setup .pin-pad { --pin-key: 60px; --pin-emblem: 56px; }
+@media (max-height: 700px) { .pin-view--setup, .pin-view--setup .pin-pad { --pin-key: 56px; --pin-emblem: 52px; } }
 .pin-view { position: relative; z-index: 1; text-align: center; display: flex; flex-direction: column; align-items: center; padding-top: clamp(0px, calc((100svh - 780px) / 3), 56px); }
 .pin-view > * + * { margin-top: 0; }
+
+/* The PIN screens cannot scroll or rubber-band (not on very short screens, where the bottom keys would be cut off). */
+@media (min-height: 600px) { html:has(.pin-view), body:has(.pin-view) { overflow: hidden; overscroll-behavior: none; } }
 
 /* ---- Lock emblem (K3): padlock in a soft ring. On success the shackle lifts and a bloom fills the screen. ---- */
 .pin-emblem { position: relative; width: var(--pin-emblem); height: var(--pin-emblem); display: grid; place-items: center; color: var(--accent); margin-bottom: var(--space-4); }
