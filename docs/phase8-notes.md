@@ -17,9 +17,9 @@ Attach a file (a contract, a receipt, a title deed) to an investment. The file i
 
 ## Not in this step
 - (Done in the polish step, see phase8b-notes.md: linking a document to a ledger entry.)
-- Previewing a file inside Apex (it downloads instead).
-- Permanent removal of the sealed file when a deletion is final. No screen permanently deletes records yet, so nothing is orphaned today.
-- Backup files do not include document files, only the records that point to them.
+- (Done in Phase 8b, see phase8b-categories-notes.md: preview of photos, text and PDFs.)
+- (Done in Phase 8b: Delete forever for documents.)
+- (Done in Phase 8b: a separate documents backup file. The records backup is unchanged.)
 - (Done in the polish step: Help topic for documents.)
 
 ## Check on the live site (5 minutes)
