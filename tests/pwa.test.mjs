@@ -73,7 +73,8 @@ async function loadWorker({ cached = {}, online = true, hang = false } = {}) {
   const mkCache = (init = {}) => { const m = new Map(Object.entries(init)); return {
     m, match: async (k) => m.get(typeof k === 'string' ? k : new URL(k.url).pathname), put: async (k, v) => { m.set(typeof k === 'string' ? k : new URL(k.url).pathname, v); },
     addAll: async (list) => { for (const u of list) m.set(u, `shell:${u}`); } }; };
-  stores.set('apex-shell-OLD', mkCache()); stores.set('apex-shell-1', mkCache(cached)); stores.set('other-app', mkCache());
+  const ver = /const VERSION = '([^']+)'/.exec(src)[1];
+  stores.set('apex-shell-OLD', mkCache()); stores.set(ver, mkCache(cached)); stores.set('other-app', mkCache());
   class Resp { constructor(body, o = {}) { this.body = body; this.status = o.status || 200; this.ok = this.status < 400; this.type = 'basic'; } clone() { return this; } }
   const self = { location: new URL('https://apex.test/'), addEventListener: (t, f) => { listeners[t] = f; }, skipWaiting() {}, clients: { claim: async () => {} } };
   const ctx = { self, Response: Resp, URL, Promise, setTimeout, console,
@@ -81,14 +82,14 @@ async function loadWorker({ cached = {}, online = true, hang = false } = {}) {
     fetch: (req) => { fetched.push(req.url); if (hang) return new Promise(() => {}); return online ? Promise.resolve(new Resp(`live:${new URL(req.url).pathname}`)) : Promise.reject(new TypeError('offline')); } };
   vm.runInNewContext(src.replace('const WAIT_MS = 4000', 'const WAIT_MS = 30'), ctx);
   const go = async (url, o = {}) => { let p = null; const req = { url, method: o.method || 'GET', mode: o.mode || 'cors' }; listeners.fetch({ request: req, respondWith: (x) => { p = x; } }); return p ? await p : 'IGNORED'; };
-  return { go, listeners, stores, fetched };
+  return { go, listeners, stores, fetched, ver };
 }
 
 test('service worker: online it serves the live file and refreshes its saved copy', async () => {
   if (!inNode) return;
   const w = await loadWorker({ cached: { '/js/app.js': 'old' } });
   eq((await w.go('https://apex.test/js/app.js')).body, 'live:/js/app.js');
-  eq((await w.stores.get('apex-shell-1').match('/js/app.js')).body, 'live:/js/app.js', 'saved copy updated');
+  eq((await w.stores.get(w.ver).match('/js/app.js')).body, 'live:/js/app.js', 'saved copy updated');
 });
 test('service worker: offline it opens the saved page for any address and the saved files', async () => {
   if (!inNode) return;
@@ -115,9 +116,9 @@ test('service worker: install saves the whole list; activate removes only old Ap
   if (!inNode) return;
   const w = await loadWorker();
   let done; w.listeners.install({ waitUntil: (p) => { done = p; } }); await done;
-  ok((await w.stores.get('apex-shell-1').match('/index.html')), 'index saved on install');
+  ok((await w.stores.get(w.ver).match('/index.html')), 'index saved on install');
   w.listeners.activate({ waitUntil: (p) => { done = p; } }); await done;
-  ok(!w.stores.has('apex-shell-OLD') && w.stores.has('apex-shell-1') && w.stores.has('other-app'), 'old Apex copy gone, others untouched');
+  ok(!w.stores.has('apex-shell-OLD') && w.stores.has(w.ver) && w.stores.has('other-app'), 'old Apex copy gone, others untouched');
 });
 
 test('install helper: no offer outside a browser, and the iPhone guidance is chosen by device', () => {

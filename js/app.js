@@ -11,6 +11,7 @@ import { confirmDialog } from './ui/dialog.js';
 import { ceremonyView, checkKeyView, forgotView, loginView, recoverView, signupView, verifyView, welcomeView } from './ui/auth-views.js';
 import { pinSetupView, pinUnlockView } from './ui/pin-views.js';
 import { mountWorkspace } from './ui/workspace.js';
+import { createPortfolio } from './models/portfolio.js';
 import { enter, toggleTheme, unlockMoment } from './ui/motion.js';
 import { initPwa } from './pwa.js';
 
@@ -53,7 +54,14 @@ const idle = createIdleLock({ ms: 120000, onLock: () => lockNow() });
 document.addEventListener('visibilitychange', () => (document.hidden ? idle.hidden() : idle.visible()));
 
 // ---------- flows ----------
-const enterApp = () => { idle.start(); sync.start(); unlockMoment(); showHome(); };
+// The name typed at sign-up is kept in memory only until the vault is open, then saved inside it (encrypted), never sent in the clear.
+let pendingName = '';
+async function applyPendingName() {
+  if (!pendingName) return;
+  const displayName = pendingName; pendingName = '';
+  try { await createPortfolio(await vault.store()).updateSettings({ displayName }); } catch (e) { console.error(e); } // the greeting simply stays generic
+}
+const enterApp = async () => { idle.start(); sync.start(); unlockMoment(); await applyPendingName(); showHome(); };
 
 async function afterUnlock() { // after password login or recovery
   const rec = await auth.pinInfo();
@@ -90,8 +98,9 @@ const showWelcome = () => show(welcomeView({ onCreate: showSignup, onSignIn: () 
 function showSignup() {
   show(signupView({
     onBack: showWelcome,
-    onSubmit: async ({ email, password }) => {
+    onSubmit: async ({ email, password, name }) => {
       const { recoveryKey } = await auth.signUp({ email, password });
+      pendingName = name || '';
       showCeremony(recoveryKey, async () => {
         const { synced } = await auth.confirmCeremony();
         if (synced) await afterUnlock(); else showVerify(email);

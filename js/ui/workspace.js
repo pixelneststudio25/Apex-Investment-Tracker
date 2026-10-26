@@ -1,14 +1,14 @@
 // The signed-in workspace: navigation, dashboard, investments, investment detail and settings.
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
-import { h } from './dom.js';
+import { h, svg } from './dom.js';
 import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
 import { slideThumb, stepSlider } from './formkit.js';
 import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
 import { amtText, fmtDate, fmtMonthYear, greeting, isHidden, money, pct, setHidden, todayISO, tone } from './fmt.js';
-import { addMonths } from '../engine/index.js';
+import { addMonths, daysBetween } from '../engine/index.js';
 import { createPortfolio } from '../models/portfolio.js';
 import { BUILT_IN_TEMPLATES, findTemplate } from '../models/templates.js';
 import { seedSamplePortfolio } from '../models/sample.js';
@@ -66,16 +66,43 @@ const initials = (s) => (String(s || '').split(/[\s@._-]+/).filter(Boolean).slic
 const lockup = () => h('span', { class: 'lockup' }, h('img', { class: 'lockup-mark', src: '/img/apex-mark.svg', alt: '', width: 32, height: 32 }), h('span', { class: 'wordmark', role: 'img', 'aria-label': 'Apex' }));
 
 // Large amount with a quiet currency sign and quiet decimals. paint(text) re-draws it; works with the count-up.
+
+// ---------- Home helpers: greeting, sparkline, attention card ----------
+const greetingGlyph = (d = new Date()) => { const hr = d.getHours(); return hr < 5 || hr >= 18 ? 'moon' : hr < 12 ? 'sunrise' : 'sun'; };
+
+function sparkline(tl) {
+  if (!tl || tl.length < 2) return null;
+  const vals = tl.slice(-14).map((p) => Number(p.valueKobo)), W = 160, H = 56;
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = hi - lo || 1;
+  const d = vals.map((v, i) => `${i ? 'L' : 'M'}${((i / (vals.length - 1)) * W).toFixed(1)} ${(H - 4 - ((v - lo) / span) * (H - 12)).toFixed(1)}`).join(' ');
+  return svg('svg', { class: 'spark', viewBox: `0 0 ${W} ${H}`, 'aria-hidden': 'true', preserveAspectRatio: 'none' },
+    svg('path', { d, fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'vector-effect': 'non-scaling-stroke' }));
+}
+
+// The first thing that needs you: overdue, or due within a week. Nothing due means no card.
+function attentionCard(up, asOf) {
+  const soon = (up || []).filter((u) => u.overdue || daysBetween(asOf, u.date) <= 7).sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  if (!soon.length) return null;
+  const first = soon[0], more = soon.length - 1, gap = daysBetween(asOf, first.date);
+  const when = first.overdue ? 'Overdue' : gap <= 0 ? 'Due today' : gap === 1 ? 'Due tomorrow' : `Due ${fmtDate(first.date)}`;
+  const sub = [when, first.investmentName].filter(Boolean).join(' · ') + (more > 0 ? ` · +${more} more` : '');
+  return h('a', { class: `attention${first.overdue ? ' is-overdue' : ''}`, href: first.investmentId ? `#/investments/${first.investmentId}` : '#/reminders' },
+    h('span', { class: 'attention-ico', 'aria-hidden': 'true' }, icon(first.overdue ? 'alert' : 'calendar', { size: 20 })),
+    h('span', { class: 'attention-text' }, h('strong', {}, first.title), h('span', { class: 'attention-sub' }, sub)),
+    icon('arrowRight', { size: 18 }));
+}
+
 function heroAmount() {
-  const cur = h('span', { class: 'cur' }), whole = h('span', { class: 'whole' }), dec = h('span', { class: 'dec' });
-  const el = h('span', { class: 'hero-num amt' }, cur, whole, dec);
+  const cur = h('span', { class: 'cur' }), whole = h('span', { class: 'whole' }), dec = h('span', { class: 'dec' }), suf = h('span', { class: 'suf' });
+  const el = h('span', { class: 'hero-num amt' }, cur, whole, dec, suf);
   const paint = (text) => {
     const m = /^(\D*?)(\d[\d,]*)(\.\d+)?(.*)$/.exec(String(text));
-    if (!m) { cur.textContent = ''; whole.textContent = text; dec.textContent = ''; return; }
-    const suffix = m[4] || '';
+    if (!m) { cur.textContent = ''; whole.textContent = text; dec.textContent = ''; suf.textContent = ''; return; }
+    const suffix = (m[4] || '').trim();
     cur.textContent = m[1].trim() ? m[1] : '';
-    whole.textContent = suffix ? m[2] + (m[3] || '') + suffix : m[2];
+    whole.textContent = suffix ? m[2] + (m[3] || '') : m[2]; // 27.47 stays big; the M or K that follows is set smaller
     dec.textContent = suffix ? '' : (m[3] || '');
+    suf.textContent = suffix;
   };
   return { el, paint };
 }
@@ -237,27 +264,50 @@ export function mountWorkspace({ data, email, actions }) {
     };
     const qa = (ic, text, props) => h(props.href ? 'a' : 'button', { class: 'qa', ...(props.href ? {} : { type: 'button' }), ...props }, h('span', { class: 'qa-ico' }, icon(ic, { size: 22 })), h('span', { class: 'qa-label' }, text));
     return h('div', { class: 'qa-row', role: 'group', 'aria-label': 'Quick actions' },
-      qa('plus', 'Add', { href: '#/new', 'aria-label': 'Add an investment' }),
-      live.length > 0 && qa('coins', 'Entry', { onclick: pick('entry', 'Add an entry to which investment?'), 'aria-label': 'Add a ledger entry' }),
-      live.length > 0 && qa('chart', 'Value', { onclick: pick('valuation', 'Add a valuation to which investment?'), 'aria-label': 'Add a valuation' }),
-      qa('search', 'Search', { onclick: () => showPalette(), 'aria-label': 'Search and commands' }));
+      qa('plus', 'Add investment', { href: '#/new', 'aria-label': 'Add an investment' }),
+      live.length > 0 && qa('coins', 'Income or cost', { onclick: pick('entry', 'Add an entry to which investment?'), 'aria-label': 'Record income or a cost' }),
+      live.length > 0 && qa('chart', 'Update value', { onclick: pick('valuation', 'Add a valuation to which investment?'), 'aria-label': 'Update what an investment is worth' }),
+      qa('trend', 'Look ahead', { href: '#/projections/all', 'aria-label': 'Look ahead: projections for everything you hold' }));
   }
   function investmentStrip(ctx, items) {
     const rank = (it) => [it.metrics.basis === 'realized' ? 1 : 0, -Number(it.metrics.currentValueKobo)];
     const shown = items.filter((it) => !it.error).sort((a, b) => { const x = rank(a), y = rank(b); return x[0] - y[0] || x[1] - y[1]; }).slice(0, 8);
     if (!shown.length) return null;
+    const openTotal = items.reduce((t, it) => (it.error || it.metrics.basis === 'realized' ? t : t + Math.max(0, Number(it.metrics.currentValueKobo))), 0);
+    const share = (m) => {
+      if (m.basis === 'realized' || openTotal <= 0) return null;
+      const r = Math.max(0, Number(m.currentValueKobo)) / openTotal, bar = h('i', {});
+      bar.style.setProperty('--share', String(Math.min(1, r)));
+      return h('span', { class: 'inv-share' }, h('span', { class: 'inv-share-bar', 'aria-hidden': 'true' }, bar), h('span', { class: 'inv-share-text' }, `${pct(r, { dp: 0 })} of what you hold`));
+    };
     return h('section', { 'aria-label': 'Your investments' }, sectionHead('Your investments', h('a', { class: 'see-all', href: '#/investments' }, 'See all')),
       h('ul', { class: 'cards' }, shown.map(({ investment: inv, metrics: m }) => { const c = ctx.cat(inv.categoryId);
         return h('li', {}, h('a', { class: 'inv-card', href: `#/investments/${inv.id}` },
           h('span', { class: `tile ${tintOf(inv.categoryId)}` }, icon(c.icon)),
           h('span', { class: 'inv-card-name' }, inv.name), h('span', { class: 'inv-card-sub' }, m.basis === 'realized' ? `${c.name}, closed` : c.name),
-          h('span', { class: 'inv-card-val money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi)));
+          h('span', { class: 'inv-card-val money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi), share(m)));
       })));
   }
 
   // ---------- setup checklist (Home) ----------
   // Every tick comes from what is actually on this device, never from a click, so it cannot say "done" falsely.
   // The sample portfolio does not count: it is made up. "Hide" is remembered on this device.
+  // First run only: an optional name for the whole collection. Asked here, not at sign-up, so sign-up stays short.
+  function portfolioNameCard(ctx) {
+    if (settings.portfolioName) return null;
+    const input = h('input', { class: 'input', id: 'pf-name', maxlength: 80, placeholder: 'For example, My assets', 'aria-label': 'Portfolio name' });
+    const save = async () => {
+      const v = input.value.trim();
+      if (!v) { input.focus(); return; }
+      settings = await ctx.pf.updateSettings({ portfolioName: v });
+      paintChrome('home'); render();
+    };
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+    return h('section', { class: 'panel name-card stack' }, h('h2', {}, 'Name your portfolio'),
+      h('p', { class: 'sub' }, 'Optional. A name for everything you hold together, like “Family assets”. You can change it any time in Settings.'),
+      h('div', { class: 'row name-row' }, input, h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, save) }, 'Save')));
+  }
+
   async function setupCard(ctx, items) {
     if (await ctx.store.meta.get('setupDismissed')) return null;
     const sample = new Set(((await ctx.store.meta.get('sampleIds')) || {}).investments || []);
@@ -295,11 +345,22 @@ export function mountWorkspace({ data, email, actions }) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
     const firstName = (settings.displayName || '').trim().split(/\s+/)[0];
-    const heading = h('div', { class: 'home-head' }, h('div', {}, h('p', { class: 'home-greet' }, greeting()), h('h1', { class: 'page-title' }, firstName || 'Welcome')),
-      settings.portfolioName && h('span', { class: 'chip chip--plain' }, settings.portfolioName));
+    const greetingHead = (live) => {
+      const now = new Date(), hello = greeting(now);
+      const date = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+      const subBits = [settings.portfolioName, live].filter(Boolean);
+      return h('div', { class: 'home-head' },
+        h('p', { class: 'home-eyebrow' }, icon(greetingGlyph(now), { size: 16 }), h('span', {}, date)),
+        h('h1', { class: 'page-title home-title' }, firstName ? [`${hello}, `, h('em', {}, firstName)] : hello),
+        subBits.length ? h('p', { class: 'home-sub' }, subBits.flatMap((b, i) => (i ? [h('span', { class: 'sep', 'aria-hidden': 'true' }, '·'), b] : [b]))) : null);
+    };
     const setup = await setupCard(ctx, items);
-    if (!items.length) return h('div', { class: 'flow' }, heading, firstRun(ctx, 'home'), rise(setup, 1));
+    if (!items.length) return h('div', { class: 'flow' }, greetingHead(null), portfolioNameCard(ctx), firstRun(ctx, 'home'), rise(setup, 1));
     const [sum, tl, up, rec, sample] = await Promise.all([ctx.pf.summary(asOf, items), ctx.pf.timeline(asOf), ctx.pf.upcoming(asOf), ctx.pf.recent(6), sampleLive(ctx.store)]);
+
+    const net = sum.netGainKobo, live = h('span', {}, `${plural(sum.count.active, 'investment', 'investments')}`, net > 0 ? [', up ', amt(net), ' overall'] : net < 0 ? [', down ', amt(-net), ' overall'] : null);
+    const heading = greetingHead(live);
+    const attention = attentionCard(up, asOf);
 
     const notes = [];
     if (sample) notes.push(h('p', { class: 'note-box' }, 'You are looking at the sample portfolio. Nothing here is real. Remove it in Settings when you are ready to start your own.'));
@@ -309,7 +370,10 @@ export function mountWorkspace({ data, email, actions }) {
     // growth chart: lives inside the statement card, under the big number
     const growth = (() => {
       if (tl.length < 2) {
-        return h('p', { class: 'sub growth-note growth-note--plain' }, 'Your growth chart appears after your first month-end.');
+        return h('div', { class: 'growth-empty' },
+          svg('svg', { class: 'growth-ghost', viewBox: '0 0 320 70', 'aria-hidden': 'true', preserveAspectRatio: 'none' },
+            svg('path', { d: 'M4 58 C40 52 60 38 100 41 S160 22 200 27 S270 10 316 8', fill: 'none', stroke: 'currentColor', 'stroke-width': '2.5', 'stroke-dasharray': '2 7', 'stroke-linecap': 'round', 'vector-effect': 'non-scaling-stroke' })),
+          h('p', { class: 'sub' }, 'Your growth line starts after your first month-end.'));
       }
       const range = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': 'Chart range' });
       const readout = h('p', { class: 'readout', 'aria-live': 'off' });
@@ -343,13 +407,16 @@ export function mountWorkspace({ data, email, actions }) {
     } else hero.paint(amtText(sum.valueKobo));
     heroPlayed = true;
     const statement = h('section', { class: 'panel statement', 'aria-label': 'Portfolio statement' },
-      h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
-      h('p', { class: 'sub statement-sub' }, pill(sum.netGainKobo, sum.roi), ' overall, counting income and anything already sold ', h('a', { class: 'link-btn', href: '#/projections/all' }, 'Look ahead')),
-      quickActions(ctx, items),
-      growth,
-      h('dl', { class: 'statement-line' },
-        stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
-        stat('Sold or repaid', amt(sum.proceedsKobo + sum.repaidKobo)), stat('Net gain', amt(sum.netGainKobo, { sign: true }), tone(sum.netGainKobo))));
+      h('div', { class: 'statement-hero' }, sparkline(tl),
+        h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
+        h('p', { class: 'statement-sub' }, pill(sum.netGainKobo, sum.roi), h('span', {}, 'overall, counting income and sales')),
+        h('a', { class: 'look-ahead', href: '#/projections/all' }, 'Look ahead', icon('arrowRight', { size: 16 }))),
+      h('div', { class: 'statement-body' },
+        quickActions(ctx, items),
+        growth,
+        h('dl', { class: 'statement-line' },
+          stat('Money put in', amt(sum.investedKobo + sum.costsKobo)), stat('Income received', amt(sum.incomeKobo)),
+          stat('Sold or repaid', amt(sum.proceedsKobo + sum.repaidKobo)))));
 
     // allocation by category
     const byCat = new Map();
@@ -385,7 +452,7 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), h('div', { class: 'row-sub' }, e.investmentName)),
         h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : miniEmpty('list', 'No activity yet. Entries you add show up here.'));
 
-    const out = h('div', { class: 'flow', 'data-noenter': '1' }, heading, ...notes, rise(setup, 0),
+    const out = h('div', { class: 'flow', 'data-noenter': '1' }, rise(heading, 0), ...notes, rise(attention, 0), rise(setup, 0),
       h('div', { class: 'dash' },
         h('div', { class: 'dash-main' }, rise(statement, 0), rise(investmentStrip(ctx, items), 1)),
         h('div', { class: 'dash-side' }, rise(allocPanel, 1), rise(comingPanel, 2)),

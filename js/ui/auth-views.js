@@ -5,8 +5,8 @@ import { stagger, withBusy } from './motion.js';
 
 const invalid = (msg) => new AuthError('VALIDATION', msg);
 
-function field({ id, label, type = 'text', autocomplete, hint, value, readonly, inputmode, placeholder }) {
-  const input = h('input', { id, name: id, type, autocomplete, value, readonly, inputmode, placeholder, class: 'input', required: true, spellcheck: 'false', autocapitalize: 'none' });
+function field({ id, label, type = 'text', autocomplete, hint, value, readonly, inputmode, placeholder, optional = false }) {
+  const input = h('input', { id, name: id, type, autocomplete, value, readonly, inputmode, placeholder, class: 'input', required: !optional, spellcheck: 'false', autocapitalize: optional ? 'words' : 'none' });
   let control = input;
   if (type === 'password') {
     const eye = h('button', { class: 'input-reveal', type: 'button', 'aria-label': 'Show password', 'aria-pressed': 'false' }, icon('eye'));
@@ -75,6 +75,7 @@ export function welcomeView({ onCreate, onSignIn }) {
 }
 
 export function signupView({ onSubmit, onBack }) {
+  const name = field({ id: 'name', label: 'Your name (optional)', type: 'text', autocomplete: 'name', optional: true, placeholder: 'How should Apex greet you?', hint: 'Used for your greeting. It is stored encrypted with your records.' });
   const email = field({ id: 'email', label: 'Email', type: 'email', autocomplete: 'username', inputmode: 'email', placeholder: 'you@example.com' });
   const pw = field({ id: 'password', label: 'Password', type: 'password', autocomplete: 'new-password', hint: 'At least 10 characters. A phrase of several words is easy to remember and hard to guess.' });
   const pw2 = field({ id: 'password2', label: 'Confirm password', type: 'password', autocomplete: 'new-password' });
@@ -83,7 +84,7 @@ export function signupView({ onSubmit, onBack }) {
   const btn = h('button', { class: 'btn', type: 'submit' }, 'Create account');
   const form = h('form', { class: 'stack', novalidate: true },
     h('h1', {}, 'Create your account'), h('hr', { class: 'gold-rule' }),
-    email.node, pw.node, pw2.node,
+    name.node, email.node, pw.node, pw2.node,
     h('label', { class: 'check' }, consent, h('span', {}, 'I agree to the privacy notice (draft) and understand that my data is encrypted with a key only I hold.')),
     box, btn, h('button', { class: 'link-btn', type: 'button', onclick: onBack }, 'Back'));
   return wireForm(form, btn, box, 'Securing your vault…', async () => {
@@ -91,7 +92,7 @@ export function signupView({ onSubmit, onBack }) {
     if (pw.input.value.length < 10) throw invalid('Your password needs at least 10 characters.');
     if (pw.input.value !== pw2.input.value) throw invalid('The two passwords do not match.');
     if (!consent.checked) throw invalid('Please accept the privacy notice to continue.');
-    await onSubmit({ email: email.input.value, password: pw.input.value });
+    await onSubmit({ email: email.input.value, password: pw.input.value, name: name.input.value.trim().slice(0, 80) });
   });
 }
 
