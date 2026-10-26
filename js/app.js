@@ -83,13 +83,13 @@ async function showLocked(notice) {
 
 const showPinUnlock = (rec) => show(pinUnlockView({
   email: rec.email, attemptsLeft: rec.attemptsLeft,
-  onPin: async (pin) => { await auth.unlockWithPin(pin); enterApp(); },
+  onPin: async (pin, ui) => { await auth.unlockWithPin(pin); await ui?.success(); enterApp(); },
   onUsePassword: () => showLogin({ email: rec.email }),
   onWiped: (msg) => showLogin({ email: rec.email, notice: msg }),
 }));
 
 const showSetPin = () => show(pinSetupView({
-  onSet: async (pin) => { await auth.setPin(pin); enterApp(); },
+  onSet: async (pin, ui) => { await auth.setPin(pin); await ui?.success('PIN set'); enterApp(); },
   onSkip: enterApp,
 }));
 
