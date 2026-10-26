@@ -127,7 +127,8 @@ export function pinUnlockView({ email, attemptsLeft, maxAttempts = DEFAULT_TRIES
       }
     },
   });
-  node.querySelector('.pin-dots').after(pipsRow); // dots, pips, message, keys
+  const dotsEl = node.querySelector('.pin-dots'); // the pips sit just under the dots without moving anything
+  const dotsWrap = h('div', { class: 'pin-dots-wrap' }); dotsEl.replaceWith(dotsWrap); dotsWrap.append(dotsEl, pipsRow);
 
   const chip = h('span', { class: 'pin-chip' }, h('span', { class: 'pin-avatar', 'aria-hidden': 'true' }, initialsFromEmail(email)), h('span', { class: 'pin-chip-text' }, email));
   return h('section', { class: 'stack pin-view' }, emblem, h('h1', {}, greeting()), email ? chip : null, node);
@@ -145,7 +146,7 @@ export function pinSetupView({ onSet, onSkip }) {
     },
   });
   title = h('h1', {}, 'Set a PIN');
-  return h('section', { class: 'stack pin-view' }, emblem, title, node,
+  return h('section', { class: 'stack pin-view pin-view--setup' }, emblem, title, node,
     h('p', { class: 'hint' }, 'The PIN only unlocks Apex on this device. Your password and recovery key still protect your account. After 5 wrong tries the PIN is removed from this device.'),
     h('button', { class: 'link-btn', type: 'button', onclick: onSkip }, 'Skip for now'));
 }
