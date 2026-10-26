@@ -8,6 +8,7 @@ import { choiceList, dateInput, field, moneyField, selectInput, textArea } from 
 import { InputError, koboToInput } from '../models/inputs.js';
 import { ENTRY_CHOICES, buildClose, buildEntry, buildValuation } from '../models/records.js';
 import { SOURCE_CHOICES } from '../models/wizard.js';
+import { entryDocuments } from './document-views.js';
 
 export async function recordFormView({ ctx, invId, kind, recordId, today, toast, go }) {
   const { store } = ctx;
@@ -64,7 +65,7 @@ export async function recordFormView({ ctx, invId, kind, recordId, today, toast,
       const data = buildEntry(form, invId);
       if (editing) { const { investmentId, ...change } = data; await store.update(recordId, change); } else await store.create('entry', data);
     }, editing ? 'Entry updated.' : 'Entry added.');
-    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && removeWithUndo(recordId, 'Entry'), editing && h('p', { class: 'sub' }, h('a', { href: `#/investments/${invId}/history/${recordId}` }, 'See the change history of this entry')));
+    return h('div', { class: 'flow form-page' }, backLink, head(editing ? 'Edit entry' : 'Add an entry'), f, editing && entryDocuments(inv, rec, (await store.list('document')).filter((d) => d.investmentId === invId), { closed }), editing && removeWithUndo(recordId, 'Entry'), editing && h('p', { class: 'sub' }, h('a', { href: `#/investments/${invId}/history/${recordId}` }, 'See the change history of this entry')));
   }
 
   // ---------- valuation ----------

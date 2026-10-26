@@ -1,4 +1,4 @@
-# Apex: Phase 0 setup
+# Apex: setup and deployment
 
 *Every asset, on record.* Plain HTML/CSS/JS, Supabase backend, Vercel hosting. Plans: General System Plan and Design & Experience Plan (plus `docs/addendum-recovery.md`).
 

@@ -270,6 +270,25 @@ export const TOPICS = Object.freeze([
     sample: null,
     keywords: 'projection forecast what if future scenario export csv spreadsheet excel download print statement pdf report',
   },
+  {
+    id: 'documents', title: 'Keeping documents with an investment', icon: 'doc', tint: 4,
+    summary: 'Attach a contract, receipt or title deed. It is locked on your device before it is stored.',
+    lead: 'Keep the papers for an investment next to its numbers. Each file is locked on your own device with your key before it is uploaded, so nobody else can read it, including the server.',
+    mock: null,
+    steps: [
+      { title: 'Open the investment', text: 'Go to the investment and find Documents on the Overview tab. Choose Add. Closed investments keep their documents, but you cannot add new ones until you reopen it.' },
+      { title: 'Choose a file', text: 'Tap the file area, or drop a file onto it on a computer. A PDF, a photo, a text file, or a Word, Excel or CSV file all work, up to 10 MB each. An investment can hold 20 documents.' },
+      { title: 'Give it a label', text: 'A label such as Tenancy agreement 2026 is shown instead of the file name. It is optional, and you can change it later.' },
+      { title: 'Link it to one entry if it fits', text: 'A receipt can be tied to the cost it proves, and a rent agreement to the first rent you received. Pick the entry from the list, or leave it unlinked. Entries with a document show a small paperclip in the ledger.', more: 'income-costs' },
+      { title: 'Watch the four steps', text: 'Apex shows what it is doing: reading the file, locking it, uploading it, then saving the record. If something fails, the step that failed is marked and nothing is left half saved.' },
+      { title: 'Open or remove it later', text: 'Open a document to download it, change its label or link, or delete it. A deleted document can be undone straight away, or restored from Recently deleted.', more: 'closing' },
+    ],
+    tryIt: { label: 'Open Investments', route: '#/investments' },
+    goodToKnow: 'Adding or opening a document needs an internet connection, because the locked file lives on the server. Backup files hold the records that point to your documents, not the documents themselves, so keep the originals too.',
+    glossary: [], faq: ['documents-offline'],
+    sample: null,
+    keywords: 'document file upload attach receipt contract title deed agreement pdf photo paperclip entry vault download',
+  },
 ]);
 
 // ---------- glossary ----------
@@ -300,6 +319,8 @@ export const GLOSSARY = Object.freeze([
 
 // ---------- frequently asked questions ----------
 export const FAQ = Object.freeze([
+  { id: 'documents-offline', find: 'document file upload offline internet open download attach', q: 'Can I add or open a document without internet?', topic: 'documents',
+    a: 'No. The records in Apex work offline, but a document is a locked file stored on the server, so adding or opening one needs a connection. Try again when you are online. Nothing is lost if an upload fails.' },
   { id: 'loan-repay', find: 'loan given repayment repaid paid back owed balance interest', q: 'How do I record money a borrower paid back?', topic: 'income-costs',
     a: 'Open the loan, choose Add entry, and pick A loan repayment. Apex takes it off what you are still owed and keeps counting interest only on the rest, so the repayment is never counted twice. Your gain is the interest you have earned. If you would rather type the balance yourself, add a valuation with what is still owed; repayments then still count as money you received.' },
   { id: 'edit-saved', find: 'edit change wrong mistake name rate date saved investment fix', q: 'Can I fix something I already saved?', topic: 'income-costs',

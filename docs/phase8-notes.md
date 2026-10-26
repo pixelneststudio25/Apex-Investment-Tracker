@@ -16,11 +16,11 @@ Attach a file (a contract, a receipt, a title deed) to an investment. The file i
 - Deleting a document hides it and you can Undo or Restore it from Recently deleted. The sealed file stays in storage so that Restore works.
 
 ## Not in this step
-- Attaching a document to a single ledger entry (the document record points at the investment only).
+- (Done in the polish step, see phase8b-notes.md: linking a document to a ledger entry.)
 - Previewing a file inside Apex (it downloads instead).
 - Permanent removal of the sealed file when a deletion is final. No screen permanently deletes records yet, so nothing is orphaned today.
 - Backup files do not include document files, only the records that point to them.
-- A Help topic for documents.
+- (Done in the polish step: Help topic for documents.)
 
 ## Check on the live site (5 minutes)
 1. Run `tests/supabase/phase8-storage-check.sql` in Supabase. Every row should be `true`.

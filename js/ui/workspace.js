@@ -495,10 +495,11 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(v.valueKobo)))))))),
       (b.schedules.length > 0 || (!closed && inv.behaviors.income !== 'none')) && h('section', {}, sectionHead('Regular payments', h('a', { class: 'link-btn', href: `#/investments/${inv.id}/schedule${b.schedules.length ? '' : '/new'}` }, b.schedules.length ? 'Manage' : 'Add one')), b.schedules.length > 0 && h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/schedule/${s.id}` }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
       h('section', {}, sectionHead('Reminders', h('a', { class: 'link-btn', href: `#/reminders/new/${inv.id}` }, 'Add')), reminders.length ? h('ul', { class: 'rows' }, reminders.map((r) => h('li', {}, h('a', { class: 'row-line', href: `#/reminders/${r.id}` }, h('span', { class: `date-col${r.dueDate < asOf ? ' overdue' : ''}` }, fmtDate(r.dueDate)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, r.text)))))) : h('p', { class: 'sub' }, 'No reminders for this investment.')),
-      documentsSection(inv, b.documents, { closed }),
+      documentsSection(inv, b.documents, { closed, entries: b.entries }),
       working);
+    const clipped = new Set(b.documents.map((d) => d.entryId).filter(Boolean));
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
-      h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
+      h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0], clipped.has(e.id) && h('span', { class: 'doc-clip' }, icon('paperclip', { size: 14, label: 'Has a document' }))), e.note && h('div', { class: 'row-sub' }, e.note)),
       h('div', { class: 'row-end' }, signed(KIND[e.kind][1] * e.amountKobo)))))) : emptyBlock({ iconName: 'list', title: 'Nothing in the ledger yet', text: closed ? 'This investment is closed, so there is nothing to add. Reopen it if you need to record more.' : 'Every payment into or out of this investment is listed here, newest first. Add the first one to get started.',
         actions: !closed && h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), help: { topic: 'income-costs', text: 'How entries work' } }),
       b.entries.length > 0 && h('p', { class: 'sub' }, `${plural(b.entries.length, 'entry', 'entries')}. Money leaving you shows as minus and money reaching you as plus. Open an entry to edit or delete it.`));
@@ -696,7 +697,7 @@ export function mountWorkspace({ data, email, actions }) {
       ctxCache = ctx;
       let view;
       if (page === 'new') view = await newView(ctx);
-      else if (page === 'investments' && parts[1] && parts[2] === 'documents' && parts[3]) view = await documentView({ ctx, toast, go }, parts[1], parts[3]);
+      else if (page === 'investments' && parts[1] && parts[2] === 'documents' && parts[3]) view = await documentView({ ctx, toast, go }, parts[1], parts[3], parts[4]);
       else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
       else if (page === 'projections' || page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
