@@ -20,7 +20,9 @@ import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip, syncPanel } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
-import { documentView, documentsSection } from './document-views.js';
+import { documentView, documentsBackupPanel, documentsSection } from './document-views.js';
+import { categoryView } from './category-views.js';
+import { humanizeKey } from '../models/categories.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
@@ -517,7 +519,7 @@ export function mountWorkspace({ data, email, actions }) {
         ['Category', c.name], ['Status', closed ? 'Closed' : 'Active'], ['Opened', fmtDate(inv.openedOn)], inv.closedOn && ['Closed', fmtDate(inv.closedOn)],
         inv.behaviors.term && ['Matures', fmtDate(inv.behaviors.term.maturityDate)], ['Value', VALUE_CHANGE[inv.behaviors.valueChange]],
         ...inv.rates.map((rt, i) => [i === 0 ? 'Rates' : '', rateSentence(inv, rt)]),
-        ...Object.entries(inv.customFields).map(([k, v]) => [defs.find((d) => d.key === k)?.label || k, v == null ? '' : String(v)]),
+        ...Object.entries(inv.customFields).map(([k, v]) => [defs.find((d) => d.key === k)?.label || humanizeKey(k), v == null ? '' : String(v)]),
       ].filter(Boolean);
       return h('div', { class: 'flow' }, h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${inv.id}/edit` }, 'Edit details'), h('a', { class: 'btn btn--secondary btn--small', href: `#/investments/${inv.id}/history` }, 'Change history')), h('dl', { class: 'defs' }, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, v)])),
         inv.notes && h('section', {}, sectionHead('Notes'), h('p', { class: 'prose' }, inv.notes)),
@@ -601,6 +603,9 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'settings-col' },
           h('section', { class: 'panel stack' }, h('h2', {}, 'Your records'), h('p', { class: 'sub' }, 'Reminders you have set, and anything you deleted that can still be brought back.'),
             h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/reminders' }, 'Reminders'), h('a', { class: 'btn btn--secondary', href: '#/deleted' }, 'Recently deleted'))),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'My categories'), h('p', { class: 'sub' }, 'Add your own kinds of investment, with the starting answers and extra details you want.'),
+            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/categories' }, 'My categories'), h('a', { class: 'btn btn--secondary', href: '#/categories/new' }, 'Add a category'))),
+          documentsBackupPanel({ ctx, toast }),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Look ahead, export and print'), h('p', { class: 'sub' }, 'Try a what-if rate on an investment, download your records for a spreadsheet, or print a clean statement.'),
             h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/projections' }, 'Projections'), h('a', { class: 'btn btn--secondary', href: '#/export' }, 'Export and print'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
@@ -658,6 +663,8 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Go to', 'Printable statement', 'doc', () => go('#/statement'), 'print pdf report statement'),
       cmd('Go to', 'Reminders', 'calendar', () => go('#/reminders'), 'dates due remind tax lease'),
       cmd('Go to', 'Recently deleted', 'undo', () => go('#/deleted'), 'restore trash bin removed'),
+      cmd('Go to', 'My categories', 'tag', () => go('#/categories'), 'category categories custom own kinds types'),
+      cmd('Actions', 'Add your own category', 'plus', () => go('#/categories/new'), 'new category custom own'),
       cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
       cmd('Go to', 'How to use Apex', 'book', () => go(HELP_ROUTE.home), 'help guide tutorial learn start glossary questions faq'),
     ].filter(Boolean);
@@ -685,10 +692,10 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' || page === 'export' || page === 'statement' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
-    root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2));
+    root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2) || (page === 'categories' && parts.length >= 2));
     outlet.setAttribute('aria-busy', 'true');
     // The skeleton only appears if loading takes a moment, so quick pages do not flash.
     const wait = setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
@@ -699,6 +706,7 @@ export function mountWorkspace({ data, email, actions }) {
       if (page === 'new') view = await newView(ctx);
       else if (page === 'investments' && parts[1] && parts[2] === 'documents' && parts[3]) view = await documentView({ ctx, toast, go }, parts[1], parts[3], parts[4]);
       else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
+      else if (page === 'categories') view = await categoryView({ ctx, toast, go }, parts);
       else if (page === 'projections' || page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);

@@ -86,7 +86,8 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
       h('p', { class: 'wizard-lede' }, LEDE.category),
       h('div', { class: 'cat-grid' }, templates.map((t) => h('button', { class: 'cat', type: 'button', 'aria-pressed': String(t.id === draft.templateId),
         onclick: () => { if (t.id !== draft.templateId) draft = applyTemplate(draft, t, today); step = 'basics'; draw(); } },
-      h('span', { class: 'tile' }, icon(t.icon)), h('span', { class: 'cat-name' }, t.name)))));
+      h('span', { class: 'tile' }, icon(t.icon)), h('span', { class: 'cat-name' }, t.name))),
+        h('a', { class: 'cat cat--new', href: '#/categories/new/blank/wizard' }, h('span', { class: 'tile' }, icon('plus')), h('span', { class: 'cat-name' }, 'Create your own'))));
   }
 
   // ---------- 2. basics ----------

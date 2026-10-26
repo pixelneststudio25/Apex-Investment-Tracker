@@ -7,7 +7,8 @@ import { setBusy, withBusy } from './motion.js';
 import { fmtDate, todayISO } from './fmt.js';
 import { field, selectInput, showErrors, textInput } from './formkit.js';
 import { InputError } from '../models/inputs.js';
-import { ACCEPTED, MAX_BYTES, MAX_PER_INVESTMENT, UPLOAD_STAGES, addDocument, checkFile, documentTitle, documentsForEntry, fileKind, readDocument, sizeText, updateDocument } from '../models/documents.js';
+import { ACCEPTED, MAX_BYTES, MAX_PER_INVESTMENT, UPLOAD_STAGES, addDocument, checkFile, documentTitle, documentsForEntry, fileKind, previewKind, previewMime, readDocument, sizeText, textPreview, updateDocument } from '../models/documents.js';
+import { createDocumentsBackup, restoreDocuments } from '../models/docbackup.js';
 
 const backLink = (href, text) => h('a', { class: 'back', href }, icon('chevronLeft', { size: 18 }), text);
 const notFound = (href, text, what) => h('div', { class: 'flow' }, backLink(href, text), h('p', { class: 'alert alert--error', role: 'alert' }, `${what} could not be found. It may have been removed.`));
@@ -175,6 +176,39 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
     } catch (x) { err.textContent = failText(x); err.hidden = false; if (err.textContent.startsWith('Something went wrong')) console.error(x); }
   }) }, icon('download'), 'Download');
 
+  // Preview: photos and text show inside the page, a PDF opens in a new tab, everything else is download-only.
+  const kind = previewKind(doc), stage = h('div', { class: 'doc-preview', hidden: true });
+  let shown = null, showing = false;
+  const load = () => readDocument({ files: ctx.files.api, getDek: ctx.files.getDek, userId: ctx.files.userId(), doc: current });
+  const clearPreview = () => { if (shown) { URL.revokeObjectURL(shown); shown = null; } stage.replaceChildren(); stage.hidden = true; showing = false; };
+  window.addEventListener('hashchange', clearPreview, { once: true });
+  const fail = (x) => { err.textContent = failText(x); err.hidden = false; if (err.textContent.startsWith('Something went wrong')) console.error(x); };
+  const previewLabel = h('span', {}, kind === 'pdf' ? 'Open in a new tab' : 'Preview');
+  const previewBtn = kind && h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => {
+    const btn = e.currentTarget; err.hidden = true;
+    if (kind === 'pdf') {
+      const win = window.open('', '_blank'); // opened now, while the tap still counts; filled in once the file is ready
+      if (win) { try { win.opener = null; } catch { /* some browsers refuse; harmless */ } }
+      return withBusy(btn, async () => {
+        try {
+          const f = await load(), u = URL.createObjectURL(new Blob([f.bytes], { type: 'application/pdf' }));
+          setTimeout(() => URL.revokeObjectURL(u), 10 * 60 * 1000);
+          if (win && !win.closed) win.location.href = u;
+          else { stage.replaceChildren(h('a', { class: 'btn', href: u, target: '_blank', rel: 'noopener' }, icon('eye'), 'Tap to open the PDF')); stage.hidden = false; }
+        } catch (x) { win?.close(); fail(x); }
+      });
+    }
+    if (showing) { clearPreview(); previewLabel.textContent = 'Preview'; return undefined; }
+    return withBusy(btn, async () => {
+      try {
+        const f = await load();
+        if (kind === 'image') { shown = URL.createObjectURL(new Blob([f.bytes], { type: previewMime(current) })); stage.replaceChildren(h('img', { class: 'doc-preview-img', src: shown, alt: documentTitle(current) })); }
+        else { const t = textPreview(f.bytes); stage.replaceChildren(h('pre', { class: 'doc-preview-text', tabindex: '0' }, t.text), t.truncated && h('p', { class: 'hint' }, 'Showing the start of the file. Download it to read the rest.')); }
+        stage.hidden = false; showing = true; previewLabel.textContent = 'Hide preview';
+      } catch (x) { fail(x); }
+    });
+  } }, icon('eye'), previewLabel);
+
   const linkedNow = (d) => (d.entryId ? entries.find((e) => e.id === d.entryId) : null);
   const entryCell = h('dd', {});
   const paintEntry = () => {
@@ -208,6 +242,40 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
   } }, 'Delete this document');
   return h('div', { class: 'flow' }, backLink(back, 'Back'), title,
     h('dl', { class: 'defs' }, h('dt', {}, 'File name'), h('dd', {}, doc.filename), h('dt', {}, 'Size'), h('dd', {}, sizeText(doc.size)), h('dt', {}, 'Added'), h('dd', {}, fmtDate(doc.uploadedOn)), h('dt', {}, 'Ledger entry'), entryCell),
-    h('div', { class: 'row' }, open), err, edit,
+    h('div', { class: 'row' }, open, previewBtn), err, stage, edit,
     h('section', {}, h('div', { class: 'section-head' }, h('h2', {}, 'Delete')), h('p', { class: 'sub' }, 'Deleting hides the document. You can undo it straight afterwards, or bring it back from Recently deleted.'), h('div', { class: 'row row--actions' }, del)));
+}
+
+// Settings: one locked file holding every document, and a way to put the files back. Needs a connection.
+export function documentsBackupPanel({ ctx, toast }) {
+  if (!ctx.files) return null;
+  const result = h('p', { class: 'sync-result', role: 'status', 'aria-live': 'polite', hidden: true });
+  const say = (text, tone = 'ok') => { result.hidden = !text; result.textContent = text || ''; result.dataset.tone = tone; };
+  const n = (c, one, many) => `${c} ${c === 1 ? one : many}`;
+  const hint = (e) => (e?.code === 'BACKUP' || ['OFFLINE', 'AUTH', 'SERVER', 'MISSING'].includes(e?.code) ? e.message : 'Something went wrong. Nothing was changed. Please try again.');
+  const download = h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => {
+    say('');
+    try {
+      const b = await createDocumentsBackup({ store: ctx.store, files: ctx.files.api, userId: ctx.files.userId(), onProgress: (i, total) => { if (total) say(`Collecting your documents: ${Math.min(i + 1, total)} of ${total}`, 'warn'); } });
+      if (!b.files && !b.missing) { say('You have no documents yet, so there is nothing to save.', 'warn'); return; }
+      saveBlob(b.filename, b.blob, 'application/octet-stream');
+      say(`Saved ${n(b.files, 'document', 'documents')} (${sizeText(b.bytes)}) to ${b.filename}. The files stay locked: only your password or recovery key can open them.${b.missing ? ` ${n(b.missing, 'file was', 'files were')} missing from the server and left out.` : ''}`, b.missing ? 'warn' : 'ok');
+      toast('Documents backup saved.');
+    } catch (x) { say(hint(x), 'bad'); if (hint(x).startsWith('Something went wrong')) console.error(x); }
+  }, { minMs: 0 }) }, icon('download'), 'Download documents backup');
+  const file = h('input', { type: 'file', accept: '.apexdocs', class: 'visually-hidden', id: 'restore-docs', tabindex: '-1' });
+  file.addEventListener('change', async () => {
+    const f = file.files?.[0]; file.value = '';
+    if (!f) return;
+    say('Reading the file…', 'warn');
+    try {
+      const r = await restoreDocuments({ bytes: new Uint8Array(await f.arrayBuffer()), files: ctx.files.api, getDek: ctx.files.getDek, userId: ctx.files.userId(), onProgress: (i, total) => { if (total) say(`Checking and uploading: ${Math.min(i + 1, total)} of ${total}`, 'warn'); } });
+      const parts = [r.restored ? `Put back ${n(r.restored, 'document', 'documents')}.` : 'Nothing needed putting back.', r.alreadyThere ? `${n(r.alreadyThere, 'was', 'were')} already stored.` : '', r.damaged ? `${n(r.damaged, 'file', 'files')} did not open with your key and were skipped.` : ''].filter(Boolean);
+      say(parts.join(' '), r.damaged ? 'warn' : 'ok');
+    } catch (x) { say(hint(x), 'bad'); if (hint(x).startsWith('Something went wrong')) console.error(x); }
+  });
+  const restore = h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => file.click() }, 'Restore documents');
+  return h('section', { class: 'panel stack' }, h('h2', {}, 'Documents backup'),
+    h('p', { class: 'sub' }, 'Your backup file holds the records that point to your documents, not the documents themselves. This file holds the documents, still locked. It can be large, so keep it somewhere safe, and an internet connection is needed.'),
+    h('div', { class: 'row' }, download, restore, file), result);
 }

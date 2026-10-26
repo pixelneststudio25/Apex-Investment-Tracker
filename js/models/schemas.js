@@ -206,6 +206,7 @@ const SCHEMAS = {
     investmentId: R(ref), filename: R(str(200)), mime: O(text(100), ''), size: R(int(0, 10 * 1024 * 1024)),
     storagePath: R(str(300)), uploadedOn: R(date), label: O(text(120), ''),
     entryId: O(ref, null), // optional: the ledger entry this file backs up (a receipt, an agreement)
+    purged: O(bool, false), // true once the file was deleted forever: the record is an empty shell that stays deleted
   }),
 
   reminder: obj({

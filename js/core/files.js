@@ -3,12 +3,13 @@
 // paths always start with their user id. This is the only file that knows Storage's request shapes.
 export const BUCKET = 'vault';
 
-export class FilesError extends Error { constructor(code, message) { super(message); this.code = code; } } // OFFLINE | AUTH | SERVER | MISSING
+export class FilesError extends Error { constructor(code, message) { super(message); this.code = code; } } // OFFLINE | AUTH | SERVER | MISSING | EXISTS
 
 function toFilesError(err) {
   const msg = String(err?.message || err || '');
   if (err instanceof TypeError || /failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(msg)) return new FilesError('OFFLINE', 'You are offline. Connect to the internet and try again.');
   if (err?.status === 401 || err?.statusCode === '401' || /jwt|not authenticated|invalid token/i.test(msg)) return new FilesError('AUTH', 'Your sign-in expired. Unlock Apex again and retry.');
+  if (err?.status === 409 || err?.statusCode === '409' || /already exists|duplicate/i.test(msg)) return new FilesError('EXISTS', 'That file is already stored.');
   if (err?.status === 404 || err?.statusCode === '404' || /not found|object not found/i.test(msg)) return new FilesError('MISSING', 'The stored file could not be found.');
   return new FilesError('SERVER', 'The server refused the request. Nothing was changed.');
 }

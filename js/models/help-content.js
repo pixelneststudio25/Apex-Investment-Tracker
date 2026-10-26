@@ -31,7 +31,7 @@ export const EXAMPLE = (() => {
 const X = EXAMPLE.text;
 
 // ---------- where "Try it now" and the sample portfolio can point ----------
-export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help', '#/projections', '#/export']);
+export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help', '#/projections', '#/export', '#/categories']);
 export const RECORD_KINDS = Object.freeze(['entry', 'valuation', 'close']); // #/investments/<id>/<kind>, see js/ui/forms.js
 export const TRY_ACTIONS = Object.freeze(['palette']);
 // The sample portfolio is created in this order (js/models/sample.js), and its ids are kept in order in the store.
@@ -281,13 +281,33 @@ export const TOPICS = Object.freeze([
       { title: 'Give it a label', text: 'A label such as Tenancy agreement 2026 is shown instead of the file name. It is optional, and you can change it later.' },
       { title: 'Link it to one entry if it fits', text: 'A receipt can be tied to the cost it proves, and a rent agreement to the first rent you received. Pick the entry from the list, or leave it unlinked. Entries with a document show a small paperclip in the ledger.', more: 'income-costs' },
       { title: 'Watch the four steps', text: 'Apex shows what it is doing: reading the file, locking it, uploading it, then saving the record. If something fails, the step that failed is marked and nothing is left half saved.' },
-      { title: 'Open or remove it later', text: 'Open a document to download it, change its label or link, or delete it. A deleted document can be undone straight away, or restored from Recently deleted.', more: 'closing' },
+      { title: 'Preview, download or open it later', text: 'Open a document to look at it. Photos and text files show inside Apex, a PDF opens in a new tab, and any file can be downloaded. You can also change its label or link there.', more: 'closing' },
+      { title: 'Delete it, or delete it forever', text: 'Delete hides a document, and you can undo it straight away or restore it from Recently deleted. To remove the file for good, use Delete forever in Recently deleted. The locked file is erased from the server and from every device, and this cannot be undone.' },
+      { title: 'Back the files up', text: 'In Settings, Documents backup saves one file holding all your documents, still locked, and can put them back later. Your normal backup file only holds the records that point to them.' },
     ],
     tryIt: { label: 'Open Investments', route: '#/investments' },
-    goodToKnow: 'Adding or opening a document needs an internet connection, because the locked file lives on the server. Backup files hold the records that point to your documents, not the documents themselves, so keep the originals too.',
+    goodToKnow: 'Adding, opening or deleting a document for good needs an internet connection, because the locked file lives on the server. Older versions of a record, with its file name, stay in your locked history after a document is deleted forever. Only your key can open them.',
     glossary: [], faq: ['documents-offline'],
     sample: null,
-    keywords: 'document file upload attach receipt contract title deed agreement pdf photo paperclip entry vault download',
+    keywords: 'document file upload attach receipt contract title deed agreement pdf photo paperclip entry vault download preview delete forever backup',
+  },
+  {
+    id: 'categories', title: 'Making your own category', icon: 'tag', tint: 3,
+    summary: 'Add a kind of investment Apex does not have, with its own starting answers and extra details.',
+    lead: 'A category is a starting point for new investments: how its value changes, what income it pays, who owns it, and any extra details you want to record. Pick it when you add an investment and the answers are already filled in.',
+    mock: null,
+    steps: [
+      { title: 'Open My categories', text: 'Go to Settings and choose My categories, or choose Create your own at the end of the category list when you add an investment.' },
+      { title: 'Start from something close', text: 'Choose Start from to copy an existing category, or begin from scratch. Then give it a name and an icon.' },
+      { title: 'Choose the starting answers', text: 'Pick how its value changes, what income it pays and who usually owns it. These are only starting answers. You can change every one when you add an investment.', more: 'valuations-rates' },
+      { title: 'Add the details you want', text: 'Add questions such as plot size or registration number, and choose whether each is text, a number, a date or a link. You can add up to 15.' },
+      { title: 'Change it or delete it later', text: 'Changes to the starting answers apply to investments you add from then on. Existing investments keep their own settings. A category that investments use cannot be deleted. An unused one can be, and you can undo it or restore it from Recently deleted.' },
+    ],
+    tryIt: { label: 'Open My categories', route: '#/categories' },
+    goodToKnow: 'Removing a detail from a category stops asking for it on new investments. A value you already saved stays saved and still shows on that investment.',
+    glossary: [], faq: [],
+    sample: null,
+    keywords: 'category categories custom own create kind type template icon details fields land vehicle new',
   },
 ]);
 

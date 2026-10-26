@@ -8,6 +8,7 @@ import { confirmDialog } from './dialog.js';
 import { fmtDate, money, todayISO } from './fmt.js';
 import { checkbox, choiceList, dateInput, field, moneyField, percentField, segmented, selectInput, showErrors, textArea, textInput } from './formkit.js';
 import { InputError, bpToInput } from '../models/inputs.js';
+import { purgeDocument } from '../models/documents.js';
 import { COMPOUND_CHOICES, FREQUENCY_CHOICES, INCOME_CHOICES, RATE_BASED, VALUE_CHOICES, hasTerm } from '../models/wizard.js';
 import { RECURRENCE_CHOICES, applySharesPlan, blankRate, buildInvestmentChange, buildReminder, buildScheduleFields, buildSharesPlan, completeChange, deletedItems, diffVersions, dueUnrecorded, editDraft, editErrors, entryFromDue, resumeChange, scheduleDraft, scheduleErrors, sharesDraft, sharesErrors, skippableDates, stopChange, withIncrease, withSkipToggled, withoutIncrease } from '../models/manage.js';
 
@@ -368,13 +369,23 @@ async function deletedView({ ctx, toast }) {
     if (it.type === 'valuation') return [`Valuation: ${money(r.valueKobo, { compact: false })}`, `${fmtDate(r.date)}, in ${inv}`];
     if (it.type === 'schedule') return [r.label || 'Regular payment', `in ${inv}`];
     if (it.type === 'document') return [r.label || r.filename, `Document, in ${inv}`];
+    if (it.type === 'categoryTemplate') return [r.name, 'Category you made'];
     return [r.text, inv ? `Reminder, ${inv}` : 'Reminder'];
   };
+  // Delete forever is offered for documents only: it removes the locked file from the server, on every device.
+  const forever = (it) => it.type === 'document' && ctx.files && h('button', { class: 'btn btn--secondary btn--small btn--danger', type: 'button', onclick: async (e) => {
+    const yes = await confirmDialog({ title: 'Delete this document forever?', body: 'The locked file is removed from the server and from every device. This cannot be undone, and the document cannot be restored afterwards.', confirmLabel: 'Delete forever', danger: true });
+    if (!yes) return;
+    await withBusy(e.currentTarget, async () => {
+      try { await purgeDocument({ store, files: ctx.files.api, doc: it.record }); toast('Document deleted forever.'); await paint(); }
+      catch (x) { toast(x instanceof InputError || ['OFFLINE', 'AUTH', 'SERVER'].includes(x?.code) ? x.message : 'Could not delete it. Nothing was changed.'); if (!(x instanceof InputError) && !x?.code) console.error(x); }
+    });
+  } }, 'Delete forever');
   async function paint() {
     const items = await deletedItems(store);
     root.replaceChildren(h('h1', { class: 'page-title' }, 'Recently deleted'), h('p', { class: 'sub' }, 'Anything you delete is kept, so you can bring it back. Restoring an investment brings back everything recorded under it.'),
       items.length ? h('ul', { class: 'rows' }, items.map((it) => { const [title, sub] = nameOf(it); return h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, title), h('div', { class: 'row-sub' }, `${sub}. Deleted ${when(it.record.deletedAt)}`)),
-        h('div', { class: 'row-end' }, h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => { await store.restore(it.record.id); toast('Restored.'); await paint(); }) }, 'Restore')))); }))
+        h('div', { class: 'row-end' }, h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => { await store.restore(it.record.id); toast('Restored.'); await paint(); }) }, 'Restore'), forever(it)))); }))
         : h('div', { class: 'mini-empty' }, icon('checkCircle', { size: 20 }), h('span', {}, 'Nothing has been deleted.')));
   }
   await paint();

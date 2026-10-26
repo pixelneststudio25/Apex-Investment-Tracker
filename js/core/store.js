@@ -149,6 +149,15 @@ export function createStore({ backend, getDek, userId, now = () => new Date().to
       });
     },
     remove(id) { return mutate(id, (cur, ts) => (cur.deletedAt ? null : { fields: fieldsOf(cur), deletedAt: ts }), { allowDeleted: true }); },
+    // Erases a record that is already deleted: replaces everything in it with `data` (a blank shell) and keeps it deleted.
+    // The shell syncs like any other change, so every device ends up with the erased version. Older versions stay in the
+    // locked history, which only your key can open.
+    scrub(id, data) {
+      return mutate(id, (cur) => {
+        if (!cur.deletedAt) throw new StoreError('NOT_DELETED', 'Only a deleted record can be erased.');
+        return { fields: validate(cur.type, data), deletedAt: cur.deletedAt };
+      }, { allowDeleted: true });
+    },
     restore(id) { return mutate(id, (cur) => (cur.deletedAt ? { fields: fieldsOf(cur), deletedAt: null } : null), { allowDeleted: true }); },
 
     // ---------- history ----------

@@ -2,6 +2,7 @@
 // device and stored in the private "vault" bucket; a small encrypted record (name, size, label, where it is stored)
 // goes through the normal store and sync like everything else. The screens live in js/ui/document-views.js.
 import { decryptFile, encryptFile } from '../core/doccrypt.js';
+import { FilesError } from '../core/files.js';
 import { InputError } from './inputs.js';
 
 export const MAX_BYTES = 10 * 1024 * 1024; // matches the bucket limit in tests/supabase/schema.sql and the record schema
@@ -89,8 +90,38 @@ export const setDocumentEntry = (store, doc, entryId) => updateDocument(store, d
 // The documents attached to one ledger entry, newest first.
 export const documentsForEntry = (documents, entryId) => documents.filter((d) => d.entryId === entryId).sort((a, b) => (a.uploadedOn < b.uploadedOn ? 1 : -1));
 
+// Delete forever: the sealed file leaves the server first (if that fails, nothing changes), then the record is
+// replaced by an empty shell that stays deleted and syncs to your other devices. Only a deleted document can be erased.
+export async function purgeDocument({ store, files, doc }) {
+  const rec = await store.get(doc.id, { includeDeleted: true });
+  if (!rec || rec.type !== 'document') throw new InputError('That document could not be found.');
+  if (rec.purged) return rec;
+  if (!rec.deletedAt) throw new InputError('Delete the document first. Then you can delete it forever from Recently deleted.');
+  await files.remove(rec.storagePath);
+  return store.scrub(rec.id, { investmentId: rec.investmentId, filename: 'Deleted document', mime: '', size: 0, storagePath: 'purged', uploadedOn: rec.uploadedOn, label: '', entryId: null, purged: true });
+}
+
+// ---------- preview ----------
+// What can be shown without leaving Apex: photos and text inside the page; a PDF in a new browser tab; everything else
+// downloads. The kind comes from the file name, never from what the file claims to be.
+const IMAGE_MIME = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' };
+export const PREVIEW_TEXT_MAX = 2 * 1024 * 1024, PREVIEW_CHARS = 20000;
+export function previewKind(doc) {
+  const e = extOf(doc?.filename || '');
+  if (IMAGE_MIME[e]) return 'image';
+  if (e === 'pdf') return 'pdf';
+  if ((e === 'txt' || e === 'csv') && (doc.size || 0) <= PREVIEW_TEXT_MAX) return 'text';
+  return null;
+}
+export const previewMime = (doc) => IMAGE_MIME[extOf(doc?.filename || '')] || (extOf(doc?.filename || '') === 'pdf' ? 'application/pdf' : 'text/plain');
+export function textPreview(bytes) {
+  const raw = new TextDecoder('utf-8').decode(bytes.subarray(0, PREVIEW_CHARS * 4)).replace(/^\uFEFF/, '');
+  return { text: raw.slice(0, PREVIEW_CHARS), truncated: raw.length > PREVIEW_CHARS || bytes.length > PREVIEW_CHARS * 4 };
+}
+
 // Downloads and opens the file. Fails clearly if it is damaged, belongs to someone else, or is gone.
 export async function readDocument({ files, getDek, userId, doc }) {
+  if (doc.purged) throw new FilesError('MISSING', 'This document was deleted forever.');
   const sealed = await files.download(doc.storagePath);
   const bytes = await decryptFile(getDek(), userId, doc.id, sealed);
   return { bytes, filename: doc.filename, mime: doc.mime || 'application/octet-stream' };

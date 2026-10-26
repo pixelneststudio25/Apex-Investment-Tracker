@@ -10,7 +10,8 @@ import { InputError } from '../js/models/inputs.js';
 import { deletedItems } from '../js/models/manage.js';
 import { decryptFile, encryptFile } from '../js/core/doccrypt.js';
 import { FilesError, createFiles } from '../js/core/files.js';
-import { MAX_BYTES, MAX_PER_INVESTMENT, UPLOAD_STAGES, addDocument, checkFile, documentsForEntry, fileKind, readDocument, renameDocument, safeFilename, setDocumentEntry, sizeText, storagePath, updateDocument } from '../js/models/documents.js';
+import { createDocumentsBackup, parseDocumentsBackup, restoreDocuments } from '../js/models/docbackup.js';
+import { MAX_BYTES, MAX_PER_INVESTMENT, PREVIEW_CHARS, UPLOAD_STAGES, addDocument, previewKind, previewMime, purgeDocument, textPreview, checkFile, documentsForEntry, fileKind, readDocument, renameDocument, safeFilename, setDocumentEntry, sizeText, storagePath, updateDocument } from '../js/models/documents.js';
 
 const TODAY = '2026-04-15', USER = 'u1';
 const tests = [];
@@ -27,7 +28,7 @@ async function fresh() {
   const inv = (await savePlan(store, buildPlan(d, findTemplate('land'), { today: TODAY }))).investmentId;
   const objects = new Map(), calls = [];
   const files = {
-    upload: async (p, b) => { calls.push(['upload', p]); if (objects.has(p)) throw new FilesError('SERVER', 'exists'); objects.set(p, new Uint8Array(b)); },
+    upload: async (p, b) => { calls.push(['upload', p]); if (objects.has(p)) throw new FilesError('EXISTS', 'exists'); objects.set(p, new Uint8Array(b)); },
     download: async (p) => { if (!objects.has(p)) throw new FilesError('MISSING', 'The stored file could not be found.'); return objects.get(p); },
     remove: async (p) => { calls.push(['remove', p]); objects.delete(p); },
   };
@@ -178,6 +179,112 @@ test('entry link: records saved before this step (no entry field) still open and
 });
 test('file kind: a plain name for the card badge', () => {
   eq(['a.pdf', 'b.JPG', 'c.heic', 'd.docx', 'e.xlsx', 'f.csv', 'g.txt', 'h.xyz', 'noext'].map(fileKind), ['PDF', 'Photo', 'Photo', 'Word', 'Excel', 'CSV', 'Text', 'File', 'File']);
+});
+
+test('storage adapter: an upload that finds the file already stored is reported as EXISTS, not as a server fault', async () => {
+  const f = createFiles({ supabase: { storage: { from: () => ({ upload: async () => ({ error: { message: 'The resource already exists', statusCode: '409', error: 'Duplicate' } }) }) } } });
+  await rejects(f.upload('u/i/d', new Uint8Array(1)), (e) => e.code === 'EXISTS');
+});
+
+// ---------- Phase 8b: delete forever, documents backup, preview ----------
+const remoteRow = (r) => ({ id: r.id, payload: r.payload, schema_version: r.schemaVersion, version: r.version, created_at: r.createdAt, updated_at: r.updatedAt, deleted_at: r.deletedAt });
+async function secondDevice(s) { const b = createStore({ backend: createMemoryBackend(), getDek: s.getDek, userId: USER, uuid: () => `b-${++n}` }); return b; }
+const ship = async (from, to, id) => { const rows = (await from.store.sync.dirtyRecords()).filter((r) => r.id === id).map(remoteRow); return to.sync.applyRemote(rows); };
+
+test('delete forever: needs the document to be deleted first, then removes the file and leaves an empty deleted shell', async () => {
+  const s = await fresh(), d = await add(s, file('deed.pdf', 'title deed text'), { label: 'Deed' });
+  await rejects(purgeDocument({ store: s.store, files: s.files, doc: d }), (e) => e instanceof InputError && /Delete the document first/.test(e.message));
+  ok(s.objects.has(d.storagePath), 'a live document keeps its file');
+  await s.store.remove(d.id);
+  const shell = await purgeDocument({ store: s.store, files: s.files, doc: d });
+  ok(!s.objects.has(d.storagePath), 'the sealed file is gone from storage');
+  eq([shell.purged, shell.filename, shell.label, shell.size, shell.entryId], [true, 'Deleted document', '', 0, null]);
+  ok(shell.deletedAt, 'still deleted'); eq((await s.store.list('document')).length, 0);
+  eq((await deletedItems(s.store)).filter((x) => x.type === 'document').length, 0, 'not offered in Recently deleted any more');
+  await rejects(readDocument({ files: s.files, getDek: s.getDek, userId: USER, doc: shell }), (e) => e.code === 'MISSING');
+  const again = await purgeDocument({ store: s.store, files: s.files, doc: d });
+  eq(again.purged, true, 'doing it twice is harmless');
+});
+test('delete forever: if the file cannot be removed (offline) nothing changes and it can be tried again', async () => {
+  const s = await fresh(), d = await add(s, file('a.pdf', 'x'));
+  await s.store.remove(d.id);
+  const real = s.files.remove; s.files.remove = async () => { throw new FilesError('OFFLINE', 'You are offline.'); };
+  await rejects(purgeDocument({ store: s.store, files: s.files, doc: d }), (e) => e.code === 'OFFLINE');
+  const rec = await s.store.get(d.id, { includeDeleted: true });
+  eq([rec.purged, rec.filename], [false, 'a.pdf'], 'the record is untouched'); ok(s.objects.has(d.storagePath), 'the file is still there');
+  s.files.remove = real; await purgeDocument({ store: s.store, files: s.files, doc: d });
+  ok(!s.objects.has(d.storagePath));
+});
+test('delete forever: the erased shell syncs, so another device loses the name and the document too', async () => {
+  const s = await fresh(), b = await secondDevice(s), d = await add(s, file('secret-name.pdf', 'x'));
+  await ship(s, b, d.id); await ship(s, b, s.inv);
+  eq((await b.list('document')).map((x) => x.filename), ['secret-name.pdf']);
+  await s.store.remove(d.id); await purgeDocument({ store: s.store, files: s.files, doc: d });
+  await ship(s, b, d.id);
+  eq((await b.list('document')).length, 0, 'gone from the list on the other device');
+  const there = await b.get(d.id, { includeDeleted: true });
+  eq([there.purged, there.filename], [true, 'Deleted document'], 'the current version holds no file name');
+});
+test('store.scrub: only a deleted record can be erased', async () => {
+  const s = await fresh(), d = await add(s, file('a.pdf', 'x'));
+  await rejects(s.store.scrub(d.id, { investmentId: s.inv, filename: 'x', storagePath: 'purged', uploadedOn: TODAY }), (e) => e.code === 'NOT_DELETED');
+});
+
+const sealedCount = (s) => s.objects.size;
+test('documents backup: one file holds every sealed document, still locked, and restores onto an empty server', async () => {
+  const s = await fresh(), a = await add(s, file('a.pdf', 'alpha secret')), b = await add(s, file('b.pdf', 'bravo secret'));
+  const made = await createDocumentsBackup({ store: s.store, files: s.files, userId: USER, now: () => '2026-10-26T10:00:00.000Z' });
+  eq([made.files, made.missing, made.filename], [2, 0, 'apex-documents-2026-10-26.apexdocs']);
+  const bytes = new Uint8Array(await made.blob.arrayBuffer());
+  ok(!new TextDecoder('latin1').decode(bytes).includes('secret'), 'no readable document text inside the backup');
+  const parsed = parseDocumentsBackup(bytes, { userId: USER });
+  eq(parsed.items.map((i) => i.path).sort(), [a.storagePath, b.storagePath].sort());
+  for (const [p] of [...s.objects]) s.objects.delete(p);
+  eq(sealedCount(s), 0);
+  const calls = [];
+  const r = await restoreDocuments({ bytes, files: s.files, getDek: s.getDek, userId: USER, onProgress: (i, t) => calls.push([i, t]) });
+  eq([r.restored, r.alreadyThere, r.damaged], [2, 0, 0]);
+  eq(calls.at(-1), [2, 2], 'progress ends complete');
+  const back = await readDocument({ files: s.files, getDek: s.getDek, userId: USER, doc: a });
+  eq(new TextDecoder().decode(back.bytes), 'alpha secret', 'a restored file opens');
+  const again = await restoreDocuments({ bytes, files: s.files, getDek: s.getDek, userId: USER });
+  eq([again.restored, again.alreadyThere], [0, 2], 'restoring twice leaves files alone');
+});
+test('documents backup: includes deleted-but-restorable documents, skips erased ones, reports files missing from the server', async () => {
+  const s = await fresh(), a = await add(s, file('a.pdf', 'a')), b = await add(s, file('b.pdf', 'b')), c = await add(s, file('c.pdf', 'c'));
+  await s.store.remove(b.id);
+  await s.store.remove(c.id); await purgeDocument({ store: s.store, files: s.files, doc: c });
+  s.objects.delete(a.storagePath);
+  const made = await createDocumentsBackup({ store: s.store, files: s.files, userId: USER });
+  eq([made.files, made.missing], [1, 1], 'b is in, c is erased and left out, a was missing');
+  const none = await fresh(); const empty = await createDocumentsBackup({ store: none.store, files: none.files, userId: USER });
+  eq([empty.files, empty.missing], [0, 0]);
+});
+test('documents backup: another account, a wrong file, damage and cut-short files are refused with a plain message', async () => {
+  const s = await fresh(); await add(s, file('a.pdf', 'alpha'));
+  const made = await createDocumentsBackup({ store: s.store, files: s.files, userId: USER });
+  const bytes = new Uint8Array(await made.blob.arrayBuffer()), bad = (e) => e.code === 'BACKUP';
+  await rejects(Promise.resolve().then(() => parseDocumentsBackup(bytes, { userId: 'someone-else' })), (e) => bad(e) && /different Apex account/.test(e.message));
+  await rejects(Promise.resolve().then(() => parseDocumentsBackup(bytesOf('{"not":"a backup at all"}'), { userId: USER })), bad);
+  await rejects(Promise.resolve().then(() => parseDocumentsBackup(bytes.subarray(0, bytes.length - 5), { userId: USER })), bad);
+  await rejects(Promise.resolve().then(() => parseDocumentsBackup(new Uint8Array([...bytes, 1, 2, 3]), { userId: USER })), bad);
+  const flipped = new Uint8Array(bytes); flipped[flipped.length - 3] ^= 1;
+  const r = await restoreDocuments({ bytes: flipped, files: { upload: async () => { throw new Error('must not upload'); } }, getDek: s.getDek, userId: USER });
+  eq([r.restored, r.damaged], [0, 1], 'a damaged file is counted and never uploaded');
+});
+
+test('preview: photos and text show in the page, a PDF opens in a tab, the rest download; the kind comes from the name', () => {
+  const k = (filename, size = 100) => previewKind({ filename, size });
+  eq([k('a.PNG'), k('b.jpeg'), k('c.webp'), k('d.pdf'), k('e.txt'), k('f.csv'), k('g.docx'), k('h.xlsx'), k('i.heic'), k('j.svg')], ['image', 'image', 'image', 'pdf', 'text', 'text', null, null, null, null]);
+  eq(k('big.txt', 3 * 1024 * 1024), null, 'a very large text file is download-only');
+  eq([previewMime({ filename: 'a.jpg' }), previewMime({ filename: 'a.pdf' })], ['image/jpeg', 'application/pdf']);
+});
+test('preview: text is cut to a screenful, a leading byte-order mark is dropped, and the cut is reported', () => {
+  const small = textPreview(bytesOf('\uFEFFname,amount\nrent,100'));
+  eq([small.text, small.truncated], ['name,amount\nrent,100', false]);
+  const long = textPreview(bytesOf('x'.repeat(PREVIEW_CHARS + 500)));
+  eq([long.text.length, long.truncated], [PREVIEW_CHARS, true]);
+  eq(textPreview(bytesOf('<b>not html</b>')).text, '<b>not html</b>', 'text is kept as plain text');
 });
 
 export async function runDocumentTests(log = console.log) {
