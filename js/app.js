@@ -4,6 +4,7 @@ import { kv } from './core/kv.js';
 import { createSupabase } from './core/supabase.js';
 import { createVault } from './core/vault.js';
 import { createRemote } from './core/remote.js';
+import { createFiles } from './core/files.js';
 import { createSync } from './core/sync.js';
 import { createBackup, restoreBackup } from './core/backup.js';
 import { confirmDialog } from './ui/dialog.js';
@@ -30,12 +31,13 @@ const show = (node, { workspace = false, wide = false } = {}) => {
   enter(node);
 };
 
-let auth, vault, sync, notifyWrite = () => {};
+let auth, vault, sync, files, notifyWrite = () => {};
 try {
   const supabase = createSupabase();
   auth = createAuth({ supabase, kv, redirectTo: location.origin + '/' });
   vault = createVault({ auth, onWrite: () => notifyWrite() }); // every local save asks the sync engine to back up shortly after
   sync = createSync({ getStore: () => vault.store(), remote: createRemote({ supabase, getUserId: () => auth.state.userId }), canRun: () => auth.isUnlocked() });
+  files = createFiles({ supabase });
   notifyWrite = () => sync.touch();
 } catch {
   app.textContent = 'Apex could not start. Please reload the page.';
@@ -188,6 +190,7 @@ function showHome() {
     onSetPin: showSetPin,
     hasPin: async () => { const r = await auth.pinInfo(); return !!r && r.userId === auth.state.userId; },
     sync,
+    files: { api: files, getDek: () => auth.state.dek, userId: () => auth.state.userId },
     exportBackup: async () => createBackup(await vault.store(), { userId: auth.state.userId }),
     importBackup: async (text) => restoreBackup(await vault.store(), text, { userId: auth.state.userId }),
     onSignOut: signOut,

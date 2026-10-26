@@ -224,7 +224,7 @@ export function diffVersions(prev, next) {
 // Deleted records worth offering back: investments, and entries/valuations/reminders/schedules that were deleted
 // on their own (not just hidden because their investment was deleted).
 export async function deletedItems(store) {
-  const [invs, ...rest] = await Promise.all(['investment', 'entry', 'valuation', 'schedule', 'reminder'].map((t) => store.list(t, { includeDeleted: true })));
+  const [invs, ...rest] = await Promise.all(['investment', 'entry', 'valuation', 'schedule', 'reminder', 'document'].map((t) => store.list(t, { includeDeleted: true })));
   const invById = new Map(invs.map((i) => [i.id, i]));
   const items = invs.filter((i) => i.deletedAt).map((r) => ({ record: r, type: 'investment', investment: r }));
   for (const list of rest) for (const r of list) {

@@ -20,6 +20,7 @@ import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip, syncPanel } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
+import { documentView, documentsSection } from './document-views.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
 
@@ -180,7 +181,7 @@ export function mountWorkspace({ data, email, actions }) {
     applyAppearance();
     const custom = await store.list('categoryTemplate');
     const cat = (id) => findTemplate(id, custom) || { id, name: 'Other', icon: 'tag', customFieldDefs: [] };
-    return { store, pf, cat };
+    return { store, pf, cat, files: actions.files || null };
   }
   const sampleLive = async (store) => !!(await store.meta.get('sampleIds'));
 
@@ -494,6 +495,7 @@ export function mountWorkspace({ data, email, actions }) {
         h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(v.valueKobo)))))))),
       (b.schedules.length > 0 || (!closed && inv.behaviors.income !== 'none')) && h('section', {}, sectionHead('Regular payments', h('a', { class: 'link-btn', href: `#/investments/${inv.id}/schedule${b.schedules.length ? '' : '/new'}` }, b.schedules.length ? 'Manage' : 'Add one')), b.schedules.length > 0 && h('ul', { class: 'rows' }, b.schedules.map((s) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/schedule/${s.id}` }, h('div', { class: 'row-main' }, scheduleSentence(s))))))),
       h('section', {}, sectionHead('Reminders', h('a', { class: 'link-btn', href: `#/reminders/new/${inv.id}` }, 'Add')), reminders.length ? h('ul', { class: 'rows' }, reminders.map((r) => h('li', {}, h('a', { class: 'row-line', href: `#/reminders/${r.id}` }, h('span', { class: `date-col${r.dueDate < asOf ? ' overdue' : ''}` }, fmtDate(r.dueDate)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, r.text)))))) : h('p', { class: 'sub' }, 'No reminders for this investment.')),
+      documentsSection(inv, b.documents, { closed }),
       working);
     panels.ledger = () => h('div', { class: 'flow' }, b.entries.length ? h('ul', { class: 'rows' }, [...b.entries].reverse().map((e) => h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}/entry/${e.id}` },
       h('span', { class: 'date-col' }, fmtDate(e.date)), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, KIND[e.kind][0]), e.note && h('div', { class: 'row-sub' }, e.note)),
@@ -694,6 +696,7 @@ export function mountWorkspace({ data, email, actions }) {
       ctxCache = ctx;
       let view;
       if (page === 'new') view = await newView(ctx);
+      else if (page === 'investments' && parts[1] && parts[2] === 'documents' && parts[3]) view = await documentView({ ctx, toast, go }, parts[1], parts[3]);
       else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
       else if (page === 'projections' || page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });

@@ -367,6 +367,7 @@ async function deletedView({ ctx, toast }) {
     if (it.type === 'entry') return [`${KIND_NAMES[r.kind]}: ${money(r.amountKobo, { compact: false })}`, `${fmtDate(r.date)}, in ${inv}`];
     if (it.type === 'valuation') return [`Valuation: ${money(r.valueKobo, { compact: false })}`, `${fmtDate(r.date)}, in ${inv}`];
     if (it.type === 'schedule') return [r.label || 'Regular payment', `in ${inv}`];
+    if (it.type === 'document') return [r.label || r.filename, `Document, in ${inv}`];
     return [r.text, inv ? `Reminder, ${inv}` : 'Reminder'];
   };
   async function paint() {
