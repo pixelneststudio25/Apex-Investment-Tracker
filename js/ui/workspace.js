@@ -22,6 +22,7 @@ import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
 import { documentView, documentsBackupPanel, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
+import { installPanel } from './install-panel.js';
 import { humanizeKey } from '../models/categories.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
@@ -599,6 +600,7 @@ export function mountWorkspace({ data, email, actions }) {
           h('section', { class: 'panel' }, h('div', { class: 'profile-head' }, h('span', { class: 'avatar avatar--lg', 'aria-hidden': 'true' }, initials(who)), h('div', {}, h('h2', {}, 'Profile'), h('p', { class: 'sub' }, email))), profile),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Appearance'), themeOpts, scale,
             h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
+          installPanel({ toast }),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn)),
         h('div', { class: 'settings-col' },
           h('section', { class: 'panel stack' }, h('h2', {}, 'Your records'), h('p', { class: 'sub' }, 'Reminders you have set, and anything you deleted that can still be brought back.'),

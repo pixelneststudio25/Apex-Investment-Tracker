@@ -12,6 +12,9 @@ import { ceremonyView, checkKeyView, forgotView, loginView, recoverView, signupV
 import { pinSetupView, pinUnlockView } from './ui/pin-views.js';
 import { mountWorkspace } from './ui/workspace.js';
 import { enter, toggleTheme, unlockMoment } from './ui/motion.js';
+import { initPwa } from './pwa.js';
+
+initPwa(); // offline copy of the app files, and the install button in Settings
 
 // Read the link parameters before the Supabase client consumes and clears them.
 const linkParams = new URLSearchParams(location.hash.slice(1));
