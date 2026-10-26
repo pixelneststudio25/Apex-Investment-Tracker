@@ -1,0 +1,80 @@
+/* Home: greeting, the green statement card, the attention card, and the finer touches. Colours come from the tokens, so both themes work. */
+
+/* soft card shadow: light uses a gentle lift, dark uses depth only */
+.ws { --shadow-card: 0 1px 2px rgba(20, 24, 27, 0.05), 0 14px 30px -18px rgba(20, 24, 27, 0.2); }
+:root[data-theme="dark"] .ws { --shadow-card: 0 10px 30px -16px rgba(0, 0, 0, 0.6); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .ws { --shadow-card: 0 10px 30px -16px rgba(0, 0, 0, 0.6); } }
+.dash .panel, .dash .inv-card, .attention { box-shadow: var(--card-highlight), var(--shadow-card); }
+.dash .panel { border-radius: var(--radius-lg); }
+
+/* ---- greeting ---- */
+.home-head { display: grid; gap: var(--space-1); justify-content: stretch; }
+.home-eyebrow { display: flex; align-items: center; gap: var(--space-2); margin: 0; color: var(--text-muted); font-size: var(--fs-caption); font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
+.home-eyebrow .icon { width: 16px; height: 16px; color: var(--chart-3); flex: none; }
+.home-title { font-size: calc(var(--fs-h1) * 1.12); line-height: 1.1; }
+.home-title em { font-style: italic; font-weight: 500; color: var(--accent); }
+.home-sub { margin: var(--space-1) 0 0; color: var(--text-muted); font-size: var(--fs-small); }
+.home-sub .sep { margin-inline: 0.5em; opacity: 0.6; }
+
+/* ---- attention card ---- */
+.attention { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); color: var(--text); text-decoration: none; }
+.attention:active { transform: scale(0.985); }
+.attention-ico { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--warn) 14%, transparent); color: var(--warn); }
+.attention.is-overdue .attention-ico { background: color-mix(in srgb, var(--negative) 12%, transparent); color: var(--negative); }
+.attention-text { display: grid; flex: 1; min-width: 0; }
+.attention-text strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.attention-sub { color: var(--text-muted); font-size: var(--fs-caption); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attention > .icon { flex: none; color: var(--text-muted); }
+
+/* ---- the statement: green hero, then the working part ---- */
+.dash-main .statement { padding: 0; overflow: hidden; }
+.statement-hero { position: relative; isolation: isolate; overflow: hidden; padding: var(--space-6); color: #F7F4EC;
+  background: radial-gradient(120% 140% at 88% -10%, #1C7B5C 0%, transparent 58%), linear-gradient(155deg, #0F5C45 0%, #0A3F31 100%); }
+.statement-body { padding: var(--space-6); }
+.statement-hero .statement-label { color: rgba(247, 244, 236, 0.82); }
+.statement-hero .hero-btn { color: #F7F4EC; margin-bottom: var(--space-4); font-variant-numeric: tabular-nums lining-nums; }
+.statement-hero .hero-num .cur, .statement-hero .hero-num .dec { color: rgba(247, 244, 236, 0.78); }
+.hero-num .suf { font-size: 0.5em; font-weight: 400; margin-left: 0.08em; letter-spacing: 0; }
+.statement-hero .statement-sub { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); color: rgba(247, 244, 236, 0.84); font-size: var(--fs-small); }
+.statement-hero .pill { background: rgba(255, 255, 255, 0.12); border-color: rgba(255, 255, 255, 0.28); }
+.statement-hero .pill.gain { color: #A7EBC0; }
+.statement-hero .pill.loss { color: #FFC4B8; }
+.statement-hero .pill.flat { color: rgba(247, 244, 236, 0.85); }
+.look-ahead { display: inline-flex; align-items: center; gap: var(--space-2); margin-top: var(--space-4); min-height: var(--tap-min); color: #F7F4EC; font: 600 var(--fs-small)/1 var(--font-sans); text-decoration: none; white-space: nowrap; }
+.look-ahead .icon { transition: transform var(--dur-fast) var(--ease-out); }
+@media (hover: hover) { .look-ahead:hover .icon { transform: translateX(4px); } }
+.look-ahead:focus-visible { outline: 2px solid #F7F4EC; outline-offset: 4px; border-radius: 6px; }
+.spark { position: absolute; z-index: -1; right: var(--space-6); bottom: var(--space-6); width: 38%; max-width: 11rem; height: 3.25rem; color: rgba(247, 244, 236, 0.5); }
+
+.statement-body .qa-row { margin-top: 0; }
+.statement-body .qa-ico { background: var(--accent-soft); border-color: transparent; }
+.statement-body .qa-label { text-align: center; text-wrap: balance; }
+.statement-body .growth { margin-top: var(--space-6); }
+.statement-body .statement-line { grid-template-columns: repeat(2, 1fr); margin-top: var(--space-6); }
+.statement-body .statement-line > div:first-child { grid-column: 1 / -1; }
+@media (min-width: 640px) {
+  .statement-body .statement-line { grid-template-columns: repeat(3, 1fr); }
+  .statement-body .statement-line > div:first-child { grid-column: auto; }
+}
+
+.growth-empty { margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border); text-align: center; }
+.growth-ghost { width: 100%; height: 4.5rem; color: var(--border-strong); }
+.growth-empty .sub { margin: var(--space-2) 0 0; }
+
+/* ---- investment cards: share of what you hold ---- */
+.inv-share { display: block; width: 100%; margin-top: var(--space-3); }
+.inv-share-bar { display: block; height: 4px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.inv-share-bar i { display: block; height: 100%; width: calc(var(--share, 0) * 100%); background: var(--accent); border-radius: 4px; }
+.inv-share-text { display: block; margin-top: 4px; color: var(--text-muted); font-size: var(--fs-caption); }
+
+/* ---- first run: name your portfolio ---- */
+.name-row { align-items: stretch; flex-wrap: nowrap; }
+.name-row .input { flex: 1 1 auto; min-width: 0; }
+
+/* ---- calmer header on phones: the theme switch lives in Settings there ---- */
+@media (max-width: 639.98px) { .topbar .theme-toggle { display: none; } }
+
+/* ---- touch feedback ---- */
+.row-line:active { background: var(--surface-2); }
+.btn:active, .hero-btn:active { transform: scale(0.98); }
+@media (prefers-reduced-motion: reduce) { .attention:active, .btn:active, .hero-btn:active { transform: none; } }
