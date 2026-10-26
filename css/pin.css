@@ -1,14 +1,15 @@
 /* PIN screens (unlock and set-a-PIN): lock emblem, greeting, round keys, dots, attempts pips, success moment.
    Tokens come from tokens.css; the generic .shake keyframes live in components.css. */
 
-/* ---- Frame: the whole block sits in the middle of the screen instead of hugging the top ---- */
-.pin-view { position: relative; z-index: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: max(34rem, calc(100dvh - 10rem)); padding-bottom: var(--space-4); }
+/* ---- Frame: the whole block sits in the middle of the screen and always fits it (sizes scale with screen height) ---- */
+.pin-view, .pin-pad { --pin-key: clamp(46px, 7.8dvh, 72px); --pin-emblem: clamp(36px, 6.4dvh, 64px); --pin-gap: clamp(0.5rem, 1.6dvh, 1rem); }
+.pin-view { position: relative; z-index: 1; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: calc(100dvh - 8.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 .pin-view > * + * { margin-top: 0; }
 
 /* ---- Lock emblem (K3): padlock in a soft ring. On success the shackle lifts and a bloom fills the screen. ---- */
-.pin-emblem { position: relative; width: 76px; height: 76px; display: grid; place-items: center; color: var(--accent); margin-bottom: var(--space-4); }
+.pin-emblem { position: relative; width: var(--pin-emblem); height: var(--pin-emblem); display: grid; place-items: center; color: var(--accent); margin-bottom: var(--pin-gap); }
 .pin-emblem-ring { position: absolute; inset: 0; border-radius: 50%; background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 30%, transparent); }
-.pin-lock { position: relative; width: 34px; height: 34px; overflow: visible; }
+.pin-lock { position: relative; width: 45%; height: 45%; overflow: visible; }
 .pin-shackle { transform-origin: 8px 11px; transition: transform var(--dur-slow) var(--ease-spring); }
 .pin-emblem.open .pin-shackle { transform: translateY(-2px) rotate(-22deg); }
 .pin-emblem.open .pin-emblem-ring { animation: pin-ring-pulse var(--dur-slow) var(--ease-out); }
@@ -17,14 +18,14 @@
 @keyframes pin-bloom { to { clip-path: circle(150vmax at var(--bx, 50%) var(--by, 30%)); } }
 
 /* ---- Greeting (G1) ---- */
-.pin-view h1 { font-size: calc(2.25rem * var(--text-scale)); line-height: 1.1; }
-.pin-chip { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; margin-top: var(--space-3); padding: 3px var(--space-3) 3px 3px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); font-size: var(--fs-caption); }
+.pin-view h1 { font-size: calc(2rem * var(--text-scale)); line-height: 1.1; }
+.pin-chip { display: inline-flex; align-items: center; gap: var(--space-2); max-width: 100%; margin-top: var(--space-2); padding: 3px var(--space-3) 3px 3px; border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted); font-size: var(--fs-caption); }
 .pin-avatar { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font: 600 0.6875rem/1 var(--font-sans); letter-spacing: 0.02em; }
 .pin-chip-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pin-sub { margin: var(--space-3) 0 0; color: var(--text-muted); max-width: 22rem; }
 
 /* ---- Dots (F1): bigger, fill with a spring; green on success, red and shaking on error ---- */
-.pin-pad { width: 100%; max-width: 20rem; margin: var(--space-8) auto 0; }
+.pin-pad { width: 100%; max-width: 20rem; margin: calc(var(--pin-gap) * 1.5) auto 0; }
 .pin-dots { display: flex; justify-content: center; gap: 1.35rem; height: 20px; align-items: center; }
 .pin-dot { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid color-mix(in srgb, var(--text-muted) 70%, transparent); transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), transform var(--dur-base) var(--ease-spring); }
 .pin-dot.on { background: var(--accent); border-color: var(--accent); transform: scale(1.2); }
@@ -35,7 +36,7 @@
 @keyframes dot-wave { 0%, 100% { transform: translateY(0) scale(1.2); } 50% { transform: translateY(-6px) scale(1.2); } }
 
 /* ---- Message line, with clear space before the keys ---- */
-.pin-msg { min-height: 1.5em; margin: var(--space-4) 0 0; font-size: var(--fs-small); color: var(--text-muted); }
+.pin-msg { min-height: 1.5em; margin: var(--space-2) 0 0; font-size: var(--fs-small); color: var(--text-muted); }
 .pin-msg--error { color: var(--negative); }
 .pin-msg--busy { display: flex; align-items: center; justify-content: center; gap: var(--space-2); color: var(--text); }
 .pin-msg--ok { display: flex; align-items: center; justify-content: center; gap: var(--space-2); color: var(--positive); font-weight: 500; }
@@ -43,7 +44,7 @@
 @keyframes pin-check-draw { to { stroke-dashoffset: 0; } }
 
 /* ---- Attempts pips (F2): five small marks, lost ones go grey-red ---- */
-.pin-pips { display: flex; justify-content: center; align-items: center; gap: 6px; height: 14px; margin-top: var(--space-2); }
+.pin-pips { display: flex; justify-content: center; align-items: center; gap: 6px; height: 12px; margin-top: 6px; }
 .pin-pips[hidden] { display: none; }
 .pin-pip { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); transition: background var(--dur-base) var(--ease-out), transform var(--dur-base) var(--ease-spring); }
 .pin-pip.lost { background: color-mix(in srgb, var(--negative) 35%, transparent); transform: scale(0.75); }
@@ -51,8 +52,8 @@
 @keyframes pin-pip-pop { 0% { transform: scale(1.7); background: var(--negative); } 100% { transform: scale(0.75); } }
 
 /* ---- Keys (K1): round, borderless, thin numerals, soft tint that blooms on press ---- */
-.pin-keys { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; gap: var(--space-4) var(--space-3); margin-top: var(--space-8); }
-.pin-key { position: relative; isolation: isolate; width: 76px; height: 76px; padding: 0; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; color: var(--text); font: 300 calc(2.125rem * var(--text-scale))/1 var(--font-sans); font-variant-numeric: tabular-nums; cursor: pointer; -webkit-user-select: none; user-select: none; touch-action: manipulation; transition: transform var(--dur-base) var(--ease-spring), opacity var(--dur-base) var(--ease-out); }
+.pin-keys { display: grid; grid-template-columns: repeat(3, 1fr); justify-items: center; gap: var(--pin-gap) var(--space-3); margin-top: calc(var(--pin-gap) * 1.5); }
+.pin-key { position: relative; isolation: isolate; width: var(--pin-key); height: var(--pin-key); padding: 0; display: grid; place-items: center; border-radius: 50%; border: 0; background: transparent; color: var(--text); font: 300 calc(var(--pin-key) * 0.46)/1 var(--font-sans); font-variant-numeric: tabular-nums; cursor: pointer; -webkit-user-select: none; user-select: none; touch-action: manipulation; transition: transform var(--dur-base) var(--ease-spring), opacity var(--dur-base) var(--ease-out); }
 .pin-key::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: 50%; background: var(--accent-soft); opacity: 0; transform: scale(0.55); transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
 .pin-key:active { transform: scale(0.94); transition-duration: var(--dur-instant); }
 .pin-key:active::after { opacity: 1; transform: scale(1); transition-duration: var(--dur-instant), 200ms; }
@@ -60,13 +61,14 @@
 .pin-key:focus-visible { outline: 2px solid var(--focus-ring, var(--accent)); outline-offset: 2px; }
 .pin-key .icon { width: 28px; height: 28px; stroke-width: 1.4; color: var(--text-muted); }
 .pin-key--del.is-idle { opacity: 0.3; }
-.pin-key--text { width: 76px; font: 500 var(--fs-caption)/1.2 var(--font-sans); color: var(--accent); text-align: center; }
-.pin-keys-gap { width: 76px; height: 76px; }
-@media (max-height: 640px) { .pin-view { min-height: 0; justify-content: flex-start; } .pin-key, .pin-keys-gap, .pin-key--text { width: 64px; height: 64px; } .pin-emblem { width: 60px; height: 60px; } .pin-keys { margin-top: var(--space-3); gap: var(--space-3); } .pin-pad { margin-top: var(--space-4); } }
+.pin-key--text { width: var(--pin-key); font: 500 var(--fs-caption)/1.2 var(--font-sans); color: var(--accent); text-align: center; }
+.pin-keys-gap { width: var(--pin-key); height: var(--pin-key); }
 
 /* ---- Footer text on the PIN screens ---- */
-.pin-view .hint { max-width: 22rem; margin: var(--space-6) auto 0; }
-.pin-view .link-btn { margin-top: var(--space-2); }
+.pin-view .hint { max-width: 22rem; margin: var(--pin-gap) auto 0; font-size: var(--fs-caption); line-height: 1.35; }
+.pin-view .link-btn { margin-top: 0; min-height: 36px; padding: 0; }
+
+@media (max-height: 700px) { .pin-view .hint { margin-top: 4px; font-size: 0.75rem; } .pin-view .link-btn { min-height: 32px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .pin-bloom { display: none; }
