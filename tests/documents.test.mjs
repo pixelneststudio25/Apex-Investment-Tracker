@@ -10,7 +10,7 @@ import { InputError } from '../js/models/inputs.js';
 import { deletedItems } from '../js/models/manage.js';
 import { decryptFile, encryptFile } from '../js/core/doccrypt.js';
 import { FilesError, createFiles } from '../js/core/files.js';
-import { MAX_BYTES, MAX_PER_INVESTMENT, addDocument, checkFile, readDocument, renameDocument, safeFilename, sizeText, storagePath } from '../js/models/documents.js';
+import { MAX_BYTES, MAX_PER_INVESTMENT, UPLOAD_STAGES, addDocument, checkFile, documentsForEntry, fileKind, readDocument, renameDocument, safeFilename, setDocumentEntry, sizeText, storagePath, updateDocument } from '../js/models/documents.js';
 
 const TODAY = '2026-04-15', USER = 'u1';
 const tests = [];
@@ -119,6 +119,65 @@ test('storage adapter: uploads as unreadable bytes without overwriting, and turn
   mode = 'offline'; await rejects(f.upload('p', new Uint8Array(1)), (e) => e.code === 'OFFLINE');
   mode = 'deny'; await rejects(f.upload('p', new Uint8Array(1)), (e) => e.code === 'SERVER' && !/row-level/.test(e.message));
   mode = 'gone'; await rejects(f.download('p'), (e) => e.code === 'MISSING'); mode = 'expired'; await rejects(f.remove('p'), (e) => e.code === 'AUTH');
+});
+
+// ---------- Phase 8b: entry links, upload steps, file kinds ----------
+const entryOf = (s, inv = s.inv, extra = {}) => s.store.create('entry', { investmentId: inv, date: '2026-03-12', kind: 'cost', amountKobo: 250000, ...extra });
+
+test('upload steps: the screen is told lock, upload, save in that order, and the list of steps is read, lock, upload, save', async () => {
+  const s = await fresh(), seen = [];
+  eq(UPLOAD_STAGES.map((x) => x.id), ['read', 'lock', 'upload', 'save']);
+  await add(s, file('a.pdf', 'hello'), { onStage: (id) => seen.push(id) });
+  eq(seen, ['lock', 'upload', 'save']);
+  const failing = await fresh(), got = [];
+  failing.files.upload = async () => { throw new FilesError('OFFLINE', 'offline'); };
+  await rejects(add(failing, file('a.pdf', 'hello'), { onStage: (id) => got.push(id) }), (e) => e.code === 'OFFLINE');
+  eq(got, ['lock', 'upload'], 'a failed upload never reaches the save step');
+});
+test('entry link: a document can be tied to a ledger entry of the same investment, and listed under it', async () => {
+  const s = await fresh(), e1 = await entryOf(s), e2 = await entryOf(s, s.inv, { kind: 'income' });
+  const d1 = await add(s, file('receipt.pdf', 'r'), { entryId: e1.id }), d2 = await add(s, file('plain.pdf', 'p')), d3 = await add(s, file('agreement.pdf', 'a'), { entryId: e1.id });
+  eq(d1.entryId, e1.id); eq(d2.entryId, null, 'no link is stored as null');
+  const all = await s.store.list('document');
+  eq(documentsForEntry(all, e1.id).map((d) => d.id).sort(), [d1.id, d3.id].sort());
+  eq(documentsForEntry(all, e2.id), []);
+});
+test('entry link: an entry from another investment, a missing entry or a deleted entry is refused before anything is uploaded', async () => {
+  const s = await fresh(), foreign = await entryOf(s, 'some-other-investment'), gone = await entryOf(s);
+  await s.store.remove(gone.id);
+  for (const id of [foreign.id, 'no-such-entry', gone.id]) await rejects(add(s, file('a.pdf', 'x'), { entryId: id }), (e) => e instanceof InputError && /entry/i.test(e.message));
+  eq(s.calls.length, 0, 'nothing was uploaded');
+  eq((await s.store.list('document')).length, 0, 'no record was made');
+  const asDoc = await add(s, file('b.pdf', 'x'));
+  await rejects(add(s, file('c.pdf', 'x'), { entryId: asDoc.id }), (e) => e instanceof InputError, 'a document is not an entry');
+});
+test('entry link: change or clear it later; label and link save together; a link to a deleted entry does not block a label edit', async () => {
+  const s = await fresh(), e1 = await entryOf(s), e2 = await entryOf(s, s.inv, { kind: 'income' });
+  const d = await add(s, file('r.pdf', 'r'), { label: 'Old', entryId: e1.id });
+  const moved = await updateDocument(s.store, d, { label: ' New label ', entryId: e2.id });
+  eq([moved.label, moved.entryId], ['New label', e2.id]);
+  const versionAfterMove = (await s.store.get(d.id)).version;
+  const cleared = await setDocumentEntry(s.store, moved, '');
+  eq(cleared.entryId, null);
+  await rejects(setDocumentEntry(s.store, cleared, 'no-such-entry'), (e) => e instanceof InputError);
+  eq((await s.store.get(d.id)).entryId, null, 'a refused link changes nothing');
+  ok((await s.store.get(d.id)).version > versionAfterMove, 'clearing saved a new version');
+  const linked = await setDocumentEntry(s.store, cleared, e1.id);
+  await s.store.remove(e1.id);
+  const relabelled = await updateDocument(s.store, linked, { label: 'Still editable' });
+  eq([relabelled.label, relabelled.entryId], ['Still editable', e1.id], 'the old link is kept as it was');
+  await s.store.restore(e1.id);
+  eq(documentsForEntry(await s.store.list('document'), e1.id).length, 1, 'restoring the entry brings the link back into view');
+});
+test('entry link: records saved before this step (no entry field) still open and read as not linked', async () => {
+  const s = await fresh();
+  const old = await s.store.create('document', { investmentId: s.inv, filename: 'old.pdf', mime: 'application/pdf', size: 3, storagePath: 'u1/x/old', uploadedOn: TODAY, label: '' });
+  eq((await s.store.get(old.id)).entryId, null);
+  const re = await renameDocument(s.store, old, 'Renamed');
+  eq([re.label, re.entryId], ['Renamed', null]);
+});
+test('file kind: a plain name for the card badge', () => {
+  eq(['a.pdf', 'b.JPG', 'c.heic', 'd.docx', 'e.xlsx', 'f.csv', 'g.txt', 'h.xyz', 'noext'].map(fileKind), ['PDF', 'Photo', 'Photo', 'Word', 'Excel', 'CSV', 'Text', 'File', 'File']);
 });
 
 export async function runDocumentTests(log = console.log) {
