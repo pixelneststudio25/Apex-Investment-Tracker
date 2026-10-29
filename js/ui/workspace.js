@@ -2,8 +2,8 @@
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
 import { h, svg } from './dom.js';
-import { animateNumber, applyTheme, currentTheme, enter, getThemeMode, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
-import { field, selectInput, slideThumb, stepSlider } from './formkit.js';
+import { animateNumber, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
+import { slideThumb } from './formkit.js';
 import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
@@ -17,12 +17,12 @@ import { wizardView } from './wizard.js';
 import { recordFormView } from './forms.js';
 import { isPaletteOpen, openPalette } from './palette.js';
 import { helpLink, helpView } from './help.js';
-import { downloadText, statusChip, syncPanel } from './sync-ui.js';
+import { downloadText, statusChip } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
-import { documentView, documentsBackupPanel, documentsSection } from './document-views.js';
+import { documentView, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
-import { installPanel } from './install-panel.js';
+import { SETTINGS_SECTIONS, settingsView } from './settings-views.js';
 import { humanizeKey } from '../models/categories.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
@@ -607,98 +607,14 @@ export function mountWorkspace({ data, email, actions }) {
   }
 
   // ---------- Settings ----------
-  async function settingsView(ctx) {
-    const sample = await sampleLive(ctx.store);
-    const who = settings.displayName || String(email || '').split('@')[0] || 'You';
-    const name = h('input', { class: 'input', id: 'displayName', value: settings.displayName, maxlength: 80, autocomplete: 'name', placeholder: 'How should Apex greet you?' });
-    const pname = h('input', { class: 'input', id: 'portfolioName', value: settings.portfolioName, maxlength: 80, placeholder: 'For example, My assets' });
-    const saved = h('p', { class: 'hint', role: 'status' });
-    const profile = h('form', { class: 'stack', novalidate: true },
-      h('div', { class: 'field' }, h('label', { for: 'displayName' }, 'Your name'), name),
-      h('div', { class: 'field' }, h('label', { for: 'portfolioName' }, 'Portfolio name'), pname, h('p', { class: 'hint' }, 'Shown on your dashboard.')),
-      h('button', { class: 'btn', type: 'submit', hidden: true }, 'Save changes'), saved);
-    const saveBtn = profile.querySelector('button[type=submit]');
-    let base = { n: settings.displayName || '', p: settings.portfolioName || '' };
-    const sync = () => { saveBtn.hidden = name.value === base.n && pname.value === base.p; if (!saveBtn.hidden) saved.textContent = ''; };
-    name.addEventListener('input', sync); pname.addEventListener('input', sync);
-    profile.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      await withBusy(profile.querySelector('button[type=submit]'), async () => {
-        settings = await ctx.pf.updateSettings({ displayName: name.value, portfolioName: pname.value });
-        paintChrome('settings');
-        base = { n: settings.displayName || '', p: settings.portfolioName || '' };
-        saveBtn.hidden = true; saved.textContent = 'Saved.';
-      });
-    });
-
-    // theme: three preview cards. The switch reveals outward from the card you pressed.
-    const themeOpts = h('div', { class: 'theme-opts', role: 'group', 'aria-label': 'Theme' },
-      [['system', 'Match device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => {
-        const b = h('button', { type: 'button', class: 'theme-opt', 'aria-pressed': String(v === getThemeMode()), 'data-mode': v },
-          h('span', { class: `theme-prev theme-prev--${v}`, 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {})), h('span', {}, l));
-        b.addEventListener('click', async () => {
-          [...themeOpts.children].forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
-          await applyTheme(v, b);
-        });
-        return b;
-      }));
-    // The cards always show what is really applied on this device and repaint whenever the theme changes anywhere
-    // (header button, search, the sign-in screen). The listener removes itself once Settings is gone.
-    const paintThemeCards = () => { const now = getThemeMode(); [...themeOpts.children].forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.mode === now))); };
-    const onThemeChange = () => { if (!themeOpts.isConnected) { document.removeEventListener('apex:theme', onThemeChange); return; } paintThemeCards(); };
-    document.addEventListener('apex:theme', onThemeChange);
-    // text size: a four-stop slider with a preview that resizes as you drag. The size is saved when you let go.
-    const SIZES = [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']];
-    const prevName = h('span', { class: 'size-preview-name' }), prevPct = h('span', {});
-    const prev = h('div', { class: 'size-preview', 'aria-hidden': 'true' },
-      h('p', { class: 'size-preview-top' }, prevName, prevPct),
-      h('p', { class: 'size-preview-amount money' }, '₦18,500,000', h('span', { class: 'dec' }, '.00')),
-      h('p', { class: 'size-preview-text' }, 'Your rent for this year has been received.'));
-    const paintPreview = ([v, name]) => { prev.style.setProperty('--pv', String(v / 100)); prevName.textContent = name; prevPct.textContent = `${v}%`; };
-    const slider = stepSlider({ label: 'Text size', stops: SIZES, value: settings.textScale || 100, hint: 'Drag to preview. The size applies everywhere when you let go.',
-      onPreview: paintPreview,
-      onChange: async ([v]) => { try { settings = await ctx.pf.updateSettings({ textScale: v }); applyAppearance(); } catch (e) { toast('Could not save the text size.'); console.error(e); } } });
-    paintPreview(slider.current());
-    const scale = h('div', { class: 'size-control' }, slider.el, prev);
-    const hide = h('input', { type: 'checkbox', id: 'hide' }); hide.checked = !!settings.hideAmounts;
-    hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); flashAmounts(); paintChrome('settings'); });
-    const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => removeSample(ctx)) }, 'Remove the sample portfolio') : sampleButton(ctx);
-
-    const lockChoice = field('Lock automatically after', selectInput({ value: String(settings.lockTimeoutMin ?? 2),
-      options: [['1', '1 minute of inactivity'], ['2', '2 minutes of inactivity'], ['5', '5 minutes of inactivity'], ['15', '15 minutes of inactivity'], ['0', 'Only when I lock it or close the app']],
-      onChange: async (v) => {
-        try { settings = await ctx.pf.updateSettings({ lockTimeoutMin: Number(v) }); actions.onLockTimeout?.(settings.lockTimeoutMin); toast('Lock time saved.'); }
-        catch (e) { toast('Could not save the lock time.'); console.error(e); }
-      } }), { hint: 'Apex also locks if you leave the app or tab for that long. The last choice means it will not lock by itself while it stays open.' });
-    return h('div', { class: 'settings flow' }, h('h1', { class: 'page-title' }, 'Settings'),
-      h('div', { class: 'settings-grid' },
-        h('div', { class: 'settings-col' },
-          h('section', { class: 'panel' }, h('div', { class: 'profile-head' }, h('span', { class: 'avatar avatar--lg', 'aria-hidden': 'true' }, initials(who)), h('div', {}, h('h2', {}, 'Profile'), h('p', { class: 'sub' }, email))), profile),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Appearance'), themeOpts, scale,
-            h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.'))),
-          installPanel({ toast }),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sample ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'), sampleBtn)),
-        h('div', { class: 'settings-col' },
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Your records'), h('p', { class: 'sub' }, 'Reminders you have set, and anything you deleted that can still be brought back.'),
-            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/reminders' }, 'Reminders'), h('a', { class: 'btn btn--secondary', href: '#/deleted' }, 'Recently deleted'))),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'My categories'), h('p', { class: 'sub' }, 'Add your own kinds of investment, with the starting answers and extra details you want.'),
-            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/categories' }, 'My categories'), h('a', { class: 'btn btn--secondary', href: '#/categories/new' }, 'Add a category'))),
-          documentsBackupPanel({ ctx, toast }),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Look ahead, export and print'), h('p', { class: 'sub' }, 'Try a what-if rate on an investment, download your records for a spreadsheet, or print a clean statement.'),
-            h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary', href: '#/projections' }, 'Projections'), h('a', { class: 'btn btn--secondary', href: '#/export' }, 'Export and print'))),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
-            h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
-          actions.sync && syncPanel({ sync: actions.sync, toast, actions }),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked automatically when you are away.`), lockChoice.el,
-            h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'))),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('p', { class: 'sub' }, 'Signing out keeps your encrypted records on this device, so Apex opens quickly next time. You will still need your password or recovery key to open them. Before signing out, Apex backs up any changes it can.'),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSignOut }, 'Sign out'))),
-          h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Danger zone'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onRotateKey }, 'Create a new recovery key')),
-            h('p', { class: 'sub' }, 'Deletes the copy of your records stored in this browser and signs you out, for example on a shared computer. Apex first checks that everything is backed up online; signing in again brings it all back.'),
-            h('div', { class: 'row' }, h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onWipe }, 'Remove my data from this device'))))));
-  }
+  // The list, the section pages and the quick pickers live in settings-views.js; this hands over what workspace.js owns.
+  const settingsEnv = (ctx) => ({
+    ctx, actions, email, toast, initials,
+    getSettings: () => settings,
+    save: async (patch) => { settings = await ctx.pf.updateSettings(patch); return settings; },
+    paintChrome, applyAppearance, flashAmounts, removeSample, sampleButton,
+    sampleLive: () => sampleLive(ctx.store),
+  });
 
   // ---------- Help ----------
   async function helpScreen(ctx, parts) {
@@ -744,6 +660,7 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Go to', 'My categories', 'tag', () => go('#/categories'), 'category categories custom own kinds types'),
       cmd('Actions', 'Add your own category', 'plus', () => go('#/categories/new'), 'new category custom own'),
       cmd('Go to', 'Settings', 'sliders', () => go('#/settings'), 'profile appearance security text size'),
+      ...Object.entries(SETTINGS_SECTIONS).map(([slug, [label, ic, words]]) => cmd('Go to', `Settings: ${label}`, ic, () => go(`#/settings/${slug}`), words)),
       cmd('Go to', 'How to use Apex', 'book', () => go(HELP_ROUTE.home), 'help guide tutorial learn start glossary questions faq'),
     ].filter(Boolean);
     for (const it of helpSearchItems()) list.push({ group: it.group, label: it.label, sub: it.sub, icon: it.icon, keywords: it.keywords, searchOnly: true, run: () => go(it.hash) });
@@ -793,7 +710,7 @@ export function mountWorkspace({ data, email, actions }) {
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);
-      else if (page === 'settings') view = await settingsView(ctx);
+      else if (page === 'settings') view = await settingsView(settingsEnv(ctx), parts);
       else if (page === 'help') view = await helpScreen(ctx, parts);
       else view = await homeView(ctx);
       if (mine !== token) return;
@@ -811,7 +728,15 @@ export function mountWorkspace({ data, email, actions }) {
     }
   }
   hideBtn.addEventListener('click', toggleHide);
-  hashHandler = () => { if (!root.isConnected) { window.removeEventListener('hashchange', hashHandler); return; } render(); };
+  let lastPage = location.hash.split('/')[1] || '';
+  hashHandler = () => {
+    if (!root.isConnected) { window.removeEventListener('hashchange', hashHandler); return; }
+    // Moving between Settings sections on a wide screen keeps the list where it is, like a two-pane app.
+    const page = location.hash.split('/')[1] || '';
+    const inPlace = page === 'settings' && lastPage === 'settings' && window.matchMedia('(min-width: 900px)').matches;
+    lastPage = page;
+    render({ keepScroll: inPlace });
+  };
   window.addEventListener('hashchange', hashHandler);
   if (!location.hash.startsWith('#/')) history.replaceState(null, '', '#/');
   render();
