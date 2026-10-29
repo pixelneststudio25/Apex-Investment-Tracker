@@ -263,6 +263,17 @@ test('idle lock: fires after the idle time, activity resets it, long absence loc
   idle.stop(); idle.bump(); ok(cb === null || locks === 2);
 });
 
+test('idle lock: the time can change while open, and 0 means never lock on idle', async () => {
+  let t = 0, cb = null, ms = null, locks = 0; const idle = createIdleLock({ ms: 120000, onLock: () => { locks++; }, now: () => t,
+    setTimer: (f, n) => { cb = f; ms = n; return 1; }, clearTimer: () => { cb = null; } });
+  idle.start(); ok(ms === 120000, 'starts with the default time');
+  idle.setMs(300000); ok(ms === 300000 && cb, 'a new time re-arms the timer straight away');
+  idle.setMs(-5); idle.setMs(NaN); ok(ms === 300000, 'nonsense is ignored');
+  idle.setMs(0); ok(cb === null, 'zero means no timer at all');
+  idle.hidden(); t += 3600000; idle.visible(); ok(locks === 0, 'zero also means a long absence does not lock');
+  idle.setMs(60000); idle.hidden(); t += 61000; idle.visible(); ok(locks === 1, 'going back to a time works again');
+});
+
 export async function runAuthTests(log = console.log) {
   let passed = 0, failed = 0;
   for (const t of tests) {
