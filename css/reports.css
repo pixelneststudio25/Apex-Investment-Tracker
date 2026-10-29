@@ -3,7 +3,9 @@
 /* ---- projections ---- */
 .scen-grid { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }
 @media (min-width: 52rem) { .scen-grid { grid-template-columns: 1fr 1fr; } }
-.scen { margin: 0; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-input); display: grid; gap: var(--space-4); }
+.scen { margin: 0; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-input); display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--space-4); }
+.scen > * { min-width: 0; }
+.scen .input, .scen .seg { max-width: 100%; }
 .scen > legend { padding: 0 var(--space-2); font-weight: 600; }
 .field-label { display: block; margin-bottom: var(--space-2); font-size: var(--fs-small); font-weight: 500; }
 .proj-table th, .proj-table td { white-space: nowrap; }
@@ -15,7 +17,9 @@
 .export-list { margin-top: var(--space-2); }
 .export-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
 .export-row:last-child { border-bottom: 0; }
-.export-row .btn { flex: 0 0 auto; }
+.export-row .row-main { flex: 1 1 14rem; }
+.export-row .btn { flex: 0 1 auto; max-width: 100%; }
+@media (max-width: 36rem) { .export-row .btn { width: 100%; } }
 
 /* ---- statement on screen ---- */
 .stmt-controls { display: grid; gap: var(--space-4); grid-template-columns: 1fr; }

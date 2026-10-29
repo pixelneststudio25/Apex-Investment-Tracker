@@ -402,3 +402,8 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .size-preview-amount .dec { font-size: 0.55em; color: var(--text-muted); font-weight: 400; }
 .size-preview-text { font: 400 calc(1rem * var(--pv))/1.5 var(--font-sans); color: var(--text-muted); transition: font-size var(--dur-fast) var(--ease-out); }
 
+
+/* Layout guards: nothing inside a page may be wider than the page. Without these a long field or a long label pushes the whole
+   screen sideways (and the tab bar with it). */
+.ws-main, .ws-outlet, .flow, .flow > *, .panel, .stack > *, fieldset { min-width: 0; }
+.panel .input, .panel .seg, .panel select { max-width: 100%; }

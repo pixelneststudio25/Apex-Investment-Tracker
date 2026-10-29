@@ -1,6 +1,8 @@
 // Settings restructure: the list, the section routes, the quick picker, the danger zone and the file registration.
 import { readFile } from 'node:fs/promises';
 import { LOCK_CHOICES, SETTINGS_SECTIONS, THEME_WORDS, lockWord } from '../js/ui/settings-views.js';
+import { backToOrigin, getOrigin, noteRoute, tabForShared } from '../js/ui/nav.js';
+import { fill } from '../js/ui/dom.js';
 
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
@@ -48,6 +50,48 @@ test('settings.css and settings-views.js are loaded by the page and cached offli
   ok(sw.includes("'/css/settings.css'") && sw.includes("'/js/ui/settings-views.js'"));
   const js = (await read('js/ui/settings-views.js')).replace(/^\s*\/\/.*$/gm, '');
   ok(!/innerHTML|setAttribute\(\s*['"]style/.test(js));
+});
+
+test('back links: Help and Projections go back to Settings when you came from Settings, otherwise Home', () => {
+  noteRoute(['home']);
+  ok(backToOrigin().href === '#/' && backToOrigin().text === 'Home' && tabForShared() === 'home');
+  noteRoute(['settings', 'appearance']);
+  ok(getOrigin() === 'settings' && backToOrigin().href === '#/settings' && tabForShared() === 'settings');
+  noteRoute(['help', 'start']);
+  ok(getOrigin() === 'settings', 'Help itself must not change where you came from');
+  noteRoute(['investments', 'abc']);
+  ok(getOrigin() === 'investments' && backToOrigin().href === '#/');
+  noteRoute(['reminders']);
+  ok(getOrigin() === 'settings', 'pages that live in Settings always count as Settings');
+});
+test('every page that lives in Settings links back to Settings', async () => {
+  const [mg, rp, cat, hp] = await Promise.all(['js/ui/manage-views.js', 'js/ui/report-views.js', 'js/ui/category-views.js', 'js/ui/help.js'].map(read));
+  ok(/backLink\('#\/settings', 'Settings'\), h\('div', \{ class: 'page-actions' \}, h\('h1', \{ class: 'page-title' \}, 'Reminders'\)/.test(mg), 'Reminders needs its back link');
+  ok(/backLink\('#\/settings', 'Settings'\), h\('h1', \{ class: 'page-title' \}, 'Recently deleted'\)/.test(mg), 'Recently deleted needs its back link');
+  ok(rp.includes("backLink('#/settings', 'Settings'), h('h1', { class: 'page-title' }, 'Export and print')") && cat.includes("backLink('#/settings', 'Settings'), h('h1', { class: 'page-title' }, 'My categories')"));
+  ok(rp.includes('backToOrigin()') && !/backLink\(back, 'Projections'\)/.test(rp), 'projection screens follow where you came from');
+  ok(hp.includes('backToOrigin()') && !hp.includes("backLink('Home', '#/')"), 'Help follows where you came from');
+});
+test('fill() never prints the word "false": a missing section is simply absent', () => {
+  const el = { replaceChildren(...k) { this.k = k; } };
+  fill(el, 'a', false, null, undefined, ['b', false], 'c');
+  ok(JSON.stringify(el.k) === JSON.stringify(['a', 'b', 'c']), JSON.stringify(el.k));
+});
+test('no page replaces its contents with a bare replaceChildren (that is how "false" got printed)', async () => {
+  for (const f of ['workspace', 'manage-views', 'report-views', 'document-views', 'category-views', 'sync-ui', 'wizard']) {
+    ok(!/[A-Za-z_]\w*\.replaceChildren\(/.test((await read(`js/ui/${f}.js`)).replace(/^\s*\/\/.*$/gm, '')), `${f}.js still calls replaceChildren directly`);
+  }
+});
+test('spacing tokens: every --space-N used by any stylesheet exists (a missing one silently removes the gap)', async () => {
+  const names = ['base', 'categories', 'components', 'documents', 'forms', 'help', 'home', 'manage', 'motion', 'picker', 'pin', 'reports', 'settings', 'sync', 'workspace'];
+  const tokens = await read('css/tokens.css');
+  const have = new Set([...tokens.matchAll(/(--space-\d+)\s*:/g)].map((m) => m[1]));
+  for (const n of names) for (const m of (await read(`css/${n}.css`)).matchAll(/var\((--space-\d+)/g)) ok(have.has(m[1]), `${n}.css uses ${m[1]}, which is not defined`);
+});
+test('wide fields cannot push a page sideways: scenario cards, export rows and the page itself are guarded', async () => {
+  const rep = await read('css/reports.css'), ws = await read('css/workspace.css');
+  ok(rep.includes('grid-template-columns: minmax(0, 1fr)') && rep.includes('.export-row .row-main { flex: 1 1 14rem; }'));
+  ok(/\.ws-main, \.ws-outlet, \.flow[^{]*\{ min-width: 0; \}/.test(ws));
 });
 
 export async function runSettingsTests(log = console.log) {
