@@ -98,12 +98,19 @@ export const currentTheme = () => {
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 };
 
-/** mode: 'light' | 'dark' | 'system'. origin: the button the reveal grows from (optional). */
+/** The choice that is really applied on this device: 'light', 'dark' or 'system'. The Appearance cards read this, never the synced vault. */
+export const getThemeMode = () => {
+  const a = document.documentElement.getAttribute('data-theme');
+  return a === 'light' || a === 'dark' ? a : 'system';
+};
+
+/** mode: 'light' | 'dark' | 'system'. origin: the button the reveal grows from (optional). Tells the rest of the app through an apex:theme event. */
 export function applyTheme(mode, origin) {
   const root = document.documentElement;
   const set = () => {
     if (mode === 'system') { root.removeAttribute('data-theme'); try { localStorage.removeItem('apex.theme'); } catch { /* storage unavailable */ } }
     else { root.setAttribute('data-theme', mode); try { localStorage.setItem('apex.theme', mode); } catch { /* storage unavailable */ } }
+    document.dispatchEvent(new CustomEvent('apex:theme', { detail: { mode } }));
   };
   return transition(set, { kind: 'theme', origin });
 }

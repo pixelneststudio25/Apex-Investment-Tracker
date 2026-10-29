@@ -209,7 +209,7 @@ export const TOPICS = Object.freeze([
     mock: {
       type: 'iconRows',
       rows: [
-        { icon: 'lock', title: 'Locks by itself', text: 'After 2 minutes of inactivity.' },
+        { icon: 'lock', title: 'Locks by itself', text: 'After 2 minutes of inactivity, or the time you choose in Settings.' },
         { icon: 'key', title: 'PIN on this device', text: 'Four digits instead of your password.' },
         { icon: 'shield', title: 'Recovery key', text: 'The only way back in if all else fails.' },
         { icon: 'eye', title: 'Hide amounts', text: 'Blurs every naira figure on screen.' },
@@ -217,7 +217,7 @@ export const TOPICS = Object.freeze([
     },
     steps: [
       { title: 'Set a PIN', text: 'In Settings, under Security, choose Set or change PIN. It unlocks Apex on this device only. After 5 wrong tries the PIN is removed from the device, and you sign in with your password again.' },
-      { title: 'Let it lock itself', text: 'Apex locks after 2 minutes of inactivity, and also if you leave the app or tab for 2 minutes or more. Use Lock now whenever you step away.' },
+      { title: 'Let it lock itself', text: 'Apex locks after 2 minutes of inactivity (you can change this in Settings, under Security), and also if you leave the app or tab for that long. Use Lock now whenever you step away.' },
       { title: 'Keep your recovery key safe', text: 'It was shown once at signup. Apex keeps no copy. Store it somewhere you will find in years, such as a printout or a password manager.' },
       { title: 'Check the key', text: 'Choose Check my recovery key in Settings, and enter the key you saved. Apex tells you if it opens your data. It changes nothing.' },
       { title: 'Hide amounts in public', text: 'Tap the eye at the top, or search for Hide amounts. Naira figures blur while percentages stay visible, which is handy on a bus or at a meeting.' },

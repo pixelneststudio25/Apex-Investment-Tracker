@@ -44,6 +44,9 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     reg = {};
     const steps = stepList(), idx = steps.indexOf(step);
     const fresh = shown !== step; shown = step; // only a new screen slides in, not a redraw after a tap
+    // A redraw after a tap keeps the place on the page and the control that had focus.
+    const CONTROLS = 'button, input, select, textarea, a[href]';
+    const keepY = fresh ? 0 : window.scrollY, keepAt = fresh ? -1 : [...root.querySelectorAll(CONTROLS)].indexOf(document.activeElement);
     const title = h('h1', { class: 'page-title wizard-title', tabindex: '-1' }, STEP_TITLES[step]);
     const body = ({ category, basics, details, money: moneyStep, value: valueStep, income: incomeStep, people: peopleStep, review })[step]();
     // One form, so pressing Enter in a field means Continue (or Save on the last screen).
@@ -55,8 +58,11 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
         steps.map((s, i) => h('span', { class: i <= idx ? 'on' : '' }))),
       h('div', { class: `wizard-head${fresh ? ' step-in' : ''}` }, title, step !== 'category' && h('p', { class: 'wizard-lede' }, LEDE[step])),
       h('div', { class: `wizard-body${fresh ? ' step-in' : ''}` }, body), footer(steps, idx)));
-    title.focus({ preventScroll: true });
-    window.scrollTo(0, 0);
+    if (fresh) { title.focus({ preventScroll: true }); window.scrollTo(0, 0); }
+    else {
+      window.scrollTo({ top: keepY, left: 0, behavior: 'instant' });
+      if (keepAt >= 0) root.querySelectorAll(CONTROLS)[keepAt]?.focus({ preventScroll: true });
+    }
   }
 
   async function cancel() {

@@ -60,7 +60,7 @@ function welcomeArt() {
 export function welcomeView({ onCreate, onSignIn }) {
   const trust = h('ul', { class: 'trust' },
     h('li', {}, icon('shield'), 'Encrypted on this device'),
-    h('li', {}, icon('clock'), 'Locks itself after 2 minutes'),
+    h('li', {}, icon('clock'), 'Locks itself when you are away'),
     h('li', {}, icon('key'), 'Your recovery key stays with you'));
   stagger(trust);
   return h('section', { class: 'welcome' },

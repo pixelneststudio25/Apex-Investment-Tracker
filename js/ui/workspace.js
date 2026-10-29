@@ -2,8 +2,8 @@
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
 import { h, svg } from './dom.js';
-import { animateNumber, applyTheme, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
-import { slideThumb, stepSlider } from './formkit.js';
+import { animateNumber, applyTheme, currentTheme, enter, getThemeMode, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
+import { field, selectInput, slideThumb, stepSlider } from './formkit.js';
 import { confirmDialog } from './dialog.js';
 import { icon } from './icons.js';
 import { donut, lineChart, segmentClass } from './charts.js';
@@ -61,7 +61,8 @@ const emptyBlock = ({ iconName, title, text, actions, hero = false, help = null 
   help && helpLink(help.topic, help.text));
 const tintOf = (id) => { let n = 0; for (const ch of String(id)) n = (n * 31 + ch.charCodeAt(0)) >>> 0; return `tint-${(n % 6) + 1}`; };
 const miniEmpty = (iconName, text) => h('div', { class: 'mini-empty' }, icon(iconName, { size: 20 }), text);
-const rise = (el, i) => { if (el && !prefersReducedMotion()) { el.classList.add('rise'); el.style.setProperty('--i', String(i)); } return el; };
+let quiet = false; // true while a page is refreshed in place, so nothing re-plays its entrance
+const rise = (el, i) => { if (el && !quiet && !prefersReducedMotion()) { el.classList.add('rise'); el.style.setProperty('--i', String(i)); } return el; };
 const initials = (s) => (String(s || '').split(/[\s@._-]+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || 'A');
 const lockup = () => h('span', { class: 'lockup' }, h('img', { class: 'lockup-mark', src: '/img/apex-mark.svg', alt: '', width: 32, height: 32 }), h('span', { class: 'wordmark', role: 'img', 'aria-label': 'Apex' }));
 
@@ -151,10 +152,8 @@ export function mountWorkspace({ data, email, actions }) {
   const moonIco = icon('moon'), sunIco = icon('sun');
   moonIco.classList.add('theme-ico', 'theme-ico--moon'); sunIco.classList.add('theme-ico', 'theme-ico--sun');
   const themeBtn = h('button', { class: 'icon-btn theme-toggle', type: 'button', 'aria-label': 'Switch between light and dark', title: 'Switch theme' }, moonIco, sunIco);
-  async function flipTheme(origin) {
-    await toggleTheme(origin);
-    try { if (ctxCache) settings = await ctxCache.pf.updateSettings({ theme: currentTheme() }); } catch (e) { console.error(e); }
-  }
+  // The theme belongs to this device (it is kept in the browser, not in the synced records), so it is never written to the vault.
+  const flipTheme = (origin) => toggleTheme(origin);
   themeBtn.addEventListener('click', () => flipTheme(themeBtn));
   // Search and commands (Ctrl+K). A button on phones and tablets, a wide search box in the desktop sidebar.
   const isMac = /mac|iphone|ipad/i.test((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '');
@@ -221,7 +220,7 @@ export function mountWorkspace({ data, email, actions }) {
       const ids = await seedSamplePortfolio(ctx.store);
       await ctx.store.meta.set('sampleIds', ids);
       toast('Sample portfolio added. Remove it any time in Settings.');
-      if (stay) { render(); return; }
+      if (stay) { render({ keepScroll: true }); return; }
       location.hash = '#/';
       if (location.hash === '#/') render();
     } catch (e) { setBusy(button, false); toast('Could not add the sample portfolio.'); throw e; }
@@ -231,17 +230,17 @@ export function mountWorkspace({ data, email, actions }) {
     for (const id of [...(ids?.investments || []), ...(ids?.partners || [])]) { try { await ctx.store.remove(id); } catch (e) { if (!(e instanceof StoreError)) throw e; } }
     await ctx.store.meta.set('sampleIds', null);
     toast('Sample portfolio removed.');
-    render();
+    render({ keepScroll: true });
   }
   async function reopen(ctx, id) {
     await ctx.store.update(id, { status: 'active', closedOn: null });
     toast('Reopened. Any sale proceeds you recorded are still in the ledger. Delete them there if they no longer apply.');
-    render();
+    render({ keepScroll: true });
   }
   async function deleteInvestment(ctx, inv) {
     if (!(await confirmDialog({ title: `Delete \"${inv.name}\"?`, body: 'It and everything recorded under it will be hidden. You can undo right after.', confirmLabel: 'Delete', cancelLabel: 'Keep it', danger: true }))) return;
     await ctx.store.remove(inv.id);
-    toast(`"${inv.name}" deleted.`, { label: 'Undo', run: async () => { await ctx.store.restore(inv.id); render(); } });
+    toast(`"${inv.name}" deleted.`, { label: 'Undo', run: async () => { await ctx.store.restore(inv.id); render({ keepScroll: true }); } });
     go('#/investments');
   }
   async function newView(ctx) {
@@ -300,7 +299,7 @@ export function mountWorkspace({ data, email, actions }) {
       const v = input.value.trim();
       if (!v) { input.focus(); return; }
       settings = await ctx.pf.updateSettings({ portfolioName: v });
-      paintChrome('home'); render();
+      paintChrome('home'); render({ keepScroll: true });
     };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
     return h('section', { class: 'panel name-card stack' }, h('h2', {}, 'Name your portfolio'),
@@ -326,7 +325,7 @@ export function mountWorkspace({ data, email, actions }) {
     const done = steps.filter((x) => x.done).length, all = done === steps.length;
     const bar = h('div', { class: 'setup-bar', role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(steps.length), 'aria-valuenow': String(done), 'aria-label': 'Setup progress' }, h('i', {}));
     bar.style.setProperty('--p', String(done / steps.length));
-    const hide = h('button', { class: 'link-btn', type: 'button', onclick: async () => { await ctx.store.meta.set('setupDismissed', true); render(); } }, all ? 'Done' : 'Hide');
+    const hide = h('button', { class: 'link-btn', type: 'button', onclick: async () => { await ctx.store.meta.set('setupDismissed', true); render({ keepScroll: true }); } }, all ? 'Done' : 'Hide');
     const list = h('ul', { class: 'setup-steps' }, steps.map((x) => h('li', { class: `setup-step${x.done ? ' is-done' : ''}` },
       h('span', { class: 'setup-check', 'aria-hidden': 'true' }, x.done && icon('check', { size: 16 })),
       h('div', { class: 'setup-text' }, h('p', { class: 'setup-title' }, x.title, x.done && h('span', { class: 'sr-only' }, ' (done)')), !x.done && h('p', { class: 'sub' }, x.text)),
@@ -635,15 +634,19 @@ export function mountWorkspace({ data, email, actions }) {
     // theme: three preview cards. The switch reveals outward from the card you pressed.
     const themeOpts = h('div', { class: 'theme-opts', role: 'group', 'aria-label': 'Theme' },
       [['system', 'Match device'], ['light', 'Light'], ['dark', 'Dark']].map(([v, l]) => {
-        const b = h('button', { type: 'button', class: 'theme-opt', 'aria-pressed': String(v === settings.theme) },
+        const b = h('button', { type: 'button', class: 'theme-opt', 'aria-pressed': String(v === getThemeMode()), 'data-mode': v },
           h('span', { class: `theme-prev theme-prev--${v}`, 'aria-hidden': 'true' }, h('i', {}), h('i', {}), h('i', {})), h('span', {}, l));
         b.addEventListener('click', async () => {
           [...themeOpts.children].forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
           await applyTheme(v, b);
-          settings = await ctx.pf.updateSettings({ theme: v });
         });
         return b;
       }));
+    // The cards always show what is really applied on this device and repaint whenever the theme changes anywhere
+    // (header button, search, the sign-in screen). The listener removes itself once Settings is gone.
+    const paintThemeCards = () => { const now = getThemeMode(); [...themeOpts.children].forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.mode === now))); };
+    const onThemeChange = () => { if (!themeOpts.isConnected) { document.removeEventListener('apex:theme', onThemeChange); return; } paintThemeCards(); };
+    document.addEventListener('apex:theme', onThemeChange);
     // text size: a four-stop slider with a preview that resizes as you drag. The size is saved when you let go.
     const SIZES = [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']];
     const prevName = h('span', { class: 'size-preview-name' }), prevPct = h('span', {});
@@ -661,6 +664,12 @@ export function mountWorkspace({ data, email, actions }) {
     hide.addEventListener('change', async () => { settings = await ctx.pf.updateSettings({ hideAmounts: hide.checked }); applyAppearance(); flashAmounts(); paintChrome('settings'); });
     const sampleBtn = sample ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => removeSample(ctx)) }, 'Remove the sample portfolio') : sampleButton(ctx);
 
+    const lockChoice = field('Lock automatically after', selectInput({ value: String(settings.lockTimeoutMin ?? 2),
+      options: [['1', '1 minute of inactivity'], ['2', '2 minutes of inactivity'], ['5', '5 minutes of inactivity'], ['15', '15 minutes of inactivity'], ['0', 'Only when I lock it or close the app']],
+      onChange: async (v) => {
+        try { settings = await ctx.pf.updateSettings({ lockTimeoutMin: Number(v) }); actions.onLockTimeout?.(settings.lockTimeoutMin); toast('Lock time saved.'); }
+        catch (e) { toast('Could not save the lock time.'); console.error(e); }
+      } }), { hint: 'Apex also locks if you leave the app or tab for that long. The last choice means it will not lock by itself while it stays open.' });
     return h('div', { class: 'settings flow' }, h('h1', { class: 'page-title' }, 'Settings'),
       h('div', { class: 'settings-grid' },
         h('div', { class: 'settings-col' },
@@ -680,7 +689,7 @@ export function mountWorkspace({ data, email, actions }) {
           h('section', { class: 'panel stack' }, h('h2', {}, 'Help'), h('p', { class: 'sub' }, 'Short guides in plain words, a glossary, and answers to what people ask most.'),
             h('div', { class: 'row' }, h('a', { class: 'btn', href: HELP_ROUTE.home }, icon('book'), 'How to use Apex'), h('a', { class: 'btn btn--secondary', href: HELP_ROUTE.faq }, 'Common questions'))),
           actions.sync && syncPanel({ sync: actions.sync, toast, actions }),
-          h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked after 2 minutes of inactivity.`),
+          h('section', { class: 'panel stack' }, h('h2', {}, 'Security'), h('p', { class: 'sub' }, `Signed in as ${email}. Records are encrypted on this device and locked automatically when you are away.`), lockChoice.el,
             h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', onclick: actions.onLock }, 'Lock now'), h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onSetPin }, 'Set or change PIN')),
             h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary', type: 'button', onclick: actions.onCheckKey }, 'Check my recovery key'))),
           h('section', { class: 'panel stack' }, h('h2', {}, 'Account'), h('p', { class: 'sub' }, 'Signing out keeps your encrypted records on this device, so Apex opens quickly next time. You will still need your password or recovery key to open them. Before signing out, Apex backs up any changes it can.'),
@@ -706,7 +715,7 @@ export function mountWorkspace({ data, email, actions }) {
 
   // ---------- search and commands (Ctrl+K) ----------
   async function toggleHide() {
-    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render(); } catch (e) { console.error(e); }
+    try { const ctx = await load(); settings = await ctx.pf.updateSettings({ hideAmounts: !settings.hideAmounts }); applyAppearance(); flashAmounts(); if (location.hash.startsWith('#/new')) paintChrome('investments'); else render({ keepScroll: true }); } catch (e) { console.error(e); }
   }
   async function showAmounts() { if (settings?.hideAmounts) await toggleHide(); }
   async function paletteItems() {
@@ -723,7 +732,7 @@ export function mountWorkspace({ data, email, actions }) {
       cmd('Actions', 'Check my recovery key', 'shield', actions.onCheckKey, 'backup'),
       actions.sync && cmd('Actions', 'Back up now', 'check', () => actions.sync.run().then((s) => toast(s.state === 'synced' && !s.pending ? 'Backed up.' : 'Could not finish backing up. See Settings.')), 'sync save cloud online'),
       actions.exportBackup && cmd('Actions', 'Download a backup file', 'download', async () => { try { const f = await actions.exportBackup(); downloadText(f.filename, f.text); toast('Backup file saved.'); } catch { toast('Could not create the backup file.'); } }, 'export save copy'),
-      dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render(); else go('#/'); }, 'getting started onboarding'),
+      dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render({ keepScroll: true }); else go('#/'); }, 'getting started onboarding'),
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
       cmd('Go to', 'Projections', 'chart', () => go('#/projections'), 'look ahead what if future forecast scenario'),
@@ -757,17 +766,21 @@ export function mountWorkspace({ data, email, actions }) {
   document.addEventListener('keydown', keyHandler);
 
   // ---------- routing ----------
-  async function render() {
+  // keepScroll: refresh the page where it stands (no skeleton, no entrance animation, same scroll position).
+  // Without it, this is a real page change and starts at the top.
+  async function render({ keepScroll = false } = {}) {
     const mine = ++token;
+    const keepY = keepScroll ? window.scrollY : 0;
+    quiet = keepScroll;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'reminders' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
     root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2) || (page === 'categories' && parts.length >= 2));
     outlet.setAttribute('aria-busy', 'true');
     // The skeleton only appears if loading takes a moment, so quick pages do not flash.
-    const wait = setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
+    const wait = keepScroll ? null : setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
     try {
       const ctx = await load();
       ctxCache = ctx;
@@ -786,15 +799,15 @@ export function mountWorkspace({ data, email, actions }) {
       if (mine !== token) return;
       paintChrome(key);
       outlet.replaceChildren(view);
-      if (!view.dataset?.noenter) enter(view);
-      window.scrollTo(0, 0);
+      if (!keepScroll && !view.dataset?.noenter) enter(view);
+      if (keepScroll) window.scrollTo({ top: keepY, left: 0, behavior: 'instant' }); else window.scrollTo(0, 0);
     } catch (e) {
       if (mine !== token || (e instanceof StoreError && e.code === 'LOCKED')) return;
       outlet.replaceChildren(h('p', { class: 'alert alert--error', role: 'alert' }, e instanceof StoreError || e.code === 'INVALID' ? e.message : 'Something went wrong while reading your records. Reload the page and try again.'));
       console.error(e);
     } finally {
       clearTimeout(wait);
-      if (mine === token) outlet.removeAttribute('aria-busy');
+      if (mine === token) { outlet.removeAttribute('aria-busy'); quiet = false; }
     }
   }
   hideBtn.addEventListener('click', toggleHide);

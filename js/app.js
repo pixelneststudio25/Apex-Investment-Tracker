@@ -44,7 +44,7 @@ try {
   files = createFiles({ supabase });
   notifyWrite = () => sync.touch();
 } catch {
-  app.textContent = 'Apex could not start. Please reload the page.';
+  app.setAttribute('role', 'alert'); app.textContent = 'Apex could not start. Please reload the page.';
   throw new Error('init failed');
 }
 
@@ -61,7 +61,9 @@ async function applyPendingName() {
   const displayName = pendingName; pendingName = '';
   try { await createPortfolio(await vault.store()).updateSettings({ displayName }); } catch (e) { console.error(e); } // the greeting simply stays generic
 }
-const enterApp = async () => { idle.start(); sync.start(); unlockMoment(); await applyPendingName(); showHome(); };
+// The lock time is a setting (Settings > Security). 0 means never on idle. Anything unreadable keeps the 2-minute default.
+async function applyLockSetting() { try { const s = await createPortfolio(await vault.store()).settings(); idle.setMs((s.lockTimeoutMin ?? 2) * 60000); } catch { /* default stays */ } }
+const enterApp = async () => { await applyLockSetting(); idle.start(); sync.start(); unlockMoment(); await applyPendingName(); showHome(); };
 
 async function afterUnlock() { // after password login or recovery
   const rec = await auth.pinInfo();
@@ -194,6 +196,7 @@ function showHome() {
     email: auth.state.email,
     actions: {
     onLock: lockNow,
+    onLockTimeout: (min) => idle.setMs(min * 60000),
     onCheckKey: showCheckKey,
     onRotateKey: async () => {
       const { recoveryKey } = await auth.beginRecoveryRotation();
