@@ -58,7 +58,8 @@ test('try it: every button points at a real route, record form or action', async
   if (!ws) return;
   for (const page of ['new', 'investments', 'settings', 'help']) ok(ws.includes(`page === '${page}'`), `workspace.js does not route "${page}"`);
   for (const kind of RECORD_KINDS) ok(forms.includes(`kind === '${kind}'`), `forms.js has no "${kind}" form`);
-  ok(ws.includes('stepSlider'), 'Settings uses the text-size slider');
+  const sv = await source('../js/ui/settings-views.js');
+  ok(sv && sv.includes('stepSlider'), 'Settings uses the text-size slider');
 });
 test('try it: picks a real active investment, skips closed ones for forms, and falls back to "add one first"', () => {
   const invs = [{ id: 'S1', name: 'Sample flat', status: 'active', sample: true }, { id: 'C1', name: 'Old bill', status: 'closed', sample: false }, { id: 'R1', name: 'My plot', status: 'active', sample: false }];
