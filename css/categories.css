@@ -12,7 +12,7 @@ a.cat--new .tile { background: var(--accent-soft); color: var(--accent); }
 .cat-fields { display: grid; gap: var(--space-3); }
 .cat-field { display: grid; grid-template-columns: 1fr auto; gap: var(--space-2); align-items: center; }
 .cat-field .input:first-child { grid-column: 1 / -1; }
-.cat-field select { min-width: 0; }
+.cat-field select, .cat-field .input--pick { min-width: 0; }
 @media (min-width: 560px) { .cat-field { grid-template-columns: 1fr 9rem auto; } .cat-field .input:first-child { grid-column: auto; } }
 .cat-remove { width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
 @media (hover: hover) { .cat-remove:hover { background: var(--surface-2); color: var(--text); } }

@@ -1,0 +1,64 @@
+/* Dropdowns and date fields: one look everywhere.
+   - .input--pick is the closed dropdown (a button that looks like the other fields).
+   - .pick-* is the sheet it opens: from the bottom on phones, a small card under the field on wide screens.
+   - Date fields keep the phone's own calendar (it is the best one to use) but wear the same shell as every other field. */
+
+/* ---- the closed dropdown ---- */
+.input--pick {
+  position: relative; display: flex; align-items: center; text-align: left; cursor: pointer; padding-right: 2.6rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%238A918B' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1.5l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 1rem center; background-size: 12px 8px;
+}
+.input--pick .pick-text { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.input--pick[aria-expanded="true"] { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+.input--pick:active { background-color: var(--surface-2); }
+
+/* ---- the sheet ---- */
+.pick-scrim { position: fixed; inset: 0; z-index: 120; display: flex; align-items: flex-end; justify-content: center; background: var(--overlay); animation: fade var(--dur-base) var(--ease-out) both; }
+.pick-scrim.out { animation: fade-out var(--dur-fast) var(--ease-out) forwards; }
+.pick {
+  display: flex; flex-direction: column; width: 100%; max-width: 32rem; max-height: min(78dvh, 34rem);
+  padding: 0 var(--space-3) calc(var(--space-4) + env(safe-area-inset-bottom));
+  background: var(--surface); border: 1px solid var(--border); border-bottom: 0; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  box-shadow: var(--shadow-3); outline: none; translate: 0 var(--pk-drag, 0px);
+  animation: sheet-in var(--dur-slow) var(--ease-out) both;
+}
+.pick-scrim.out .pick { animation: sheet-out var(--dur-fast) var(--ease-in-out) forwards; }
+.pick-handle { flex: none; display: grid; place-items: center; height: 28px; margin: 0 calc(var(--space-3) * -1); cursor: grab; touch-action: none; }
+.pick-handle span { width: 40px; height: 4px; border-radius: 2px; background: var(--border-strong); }
+.pick-title { flex: none; margin: 0 0 var(--space-2); padding: 0 var(--space-3); color: var(--text-muted); font: 600 var(--fs-caption)/1.2 var(--font-sans); letter-spacing: 0.06em; text-transform: uppercase; touch-action: none; }
+.pick-list { list-style: none; margin: 0; padding: 0 0 var(--space-1); overflow-y: auto; overscroll-behavior: contain; display: grid; gap: 2px; }
+.pick-opt {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); min-height: 52px; padding: var(--space-3);
+  border-radius: var(--radius-input); color: var(--text); font: 400 var(--fs-body)/1.3 var(--font-sans); cursor: pointer; outline: none;
+  -webkit-tap-highlight-color: transparent; transition: background var(--dur-fast) var(--ease-out);
+}
+.pick-opt .icon { flex: none; color: var(--accent); }
+.pick-opt[aria-selected="true"] { background: var(--accent-soft); font-weight: 600; }
+.pick-opt:active { background: var(--surface-2); }
+.pick-opt:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+@media (hover: hover) { .pick-opt:hover { background: var(--surface-2); } .pick-opt[aria-selected="true"]:hover { background: var(--accent-soft); } }
+
+@media (min-width: 640px) {
+  .pick-scrim { align-items: flex-start; justify-content: flex-start; background: transparent; }
+  .pick {
+    position: fixed; left: var(--pk-x, 0); top: var(--pk-y, 0); width: var(--pk-w, 20rem); max-width: none; max-height: var(--pk-h, 22rem);
+    padding: var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-card); translate: none;
+    animation-name: dialog-in; transform-origin: top center;
+  }
+  .pick--up { transform-origin: bottom center; }
+  .pick-scrim.out .pick { animation-name: dialog-out; }
+  .pick-handle, .pick-title { display: none; }
+}
+
+/* ---- date fields ---- */
+input.input[type="date"] {
+  -webkit-appearance: none; appearance: none; position: relative; display: block; min-width: 0; text-align: left; cursor: pointer; padding-right: 2.8rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%238A918B' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3.5' y='5' width='17' height='15.5' rx='2.5'/%3E%3Cpath d='M3.5 10h17M8 3v4M16 3v4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.95rem center; background-size: 20px 20px;
+}
+/* the whole field opens the calendar, not just the little native icon */
+input.input[type="date"]::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; }
+input.input[type="date"]::-webkit-date-and-time-value { text-align: left; min-height: 1.3em; }
+input.input[type="date"]::-webkit-datetime-edit { padding: 0; }
+input.input[type="date"]::-webkit-datetime-edit-fields-wrapper { padding: 0; }
