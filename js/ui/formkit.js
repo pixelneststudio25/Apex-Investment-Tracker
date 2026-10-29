@@ -4,6 +4,7 @@ import { h } from './dom.js';
 import { icon } from './icons.js';
 import { parseNaira } from '../models/inputs.js';
 import { money } from './fmt.js';
+import { pickOption } from './picker.js';
 
 let counter = 0;
 const nextId = (p) => `${p}-${++counter}`;
@@ -47,11 +48,24 @@ export function textArea({ value = '', onInput, rows = 3, maxlength } = {}) {
   };
 }
 
+// A dropdown. It looks like the other fields and opens the Apex sheet (js/ui/picker.js) instead of the phone's own
+// picker, so every choose-one field in the app is the same. The button still has .value, so callers read it as before.
 export function selectInput({ value, options, onChange } = {}) {
   return (id) => {
-    const el = h('select', { class: 'input', id }, options.map(([v, l]) => h('option', { value: v }, l)));
-    el.value = value;
-    if (onChange) el.addEventListener('change', () => onChange(el.value));
+    const text = h('span', { class: 'pick-text' });
+    const el = h('button', { class: 'input input--pick', id, type: 'button', 'aria-haspopup': 'listbox', 'aria-expanded': 'false' }, text);
+    let current = value;
+    const draw = () => { text.textContent = options.find((o) => o[0] === current)?.[1] ?? ''; };
+    Object.defineProperty(el, 'value', { get: () => current, set: (v) => { current = v; draw(); }, configurable: true });
+    draw();
+    el.addEventListener('click', async () => {
+      const lab = document.querySelector(`label[for="${id}"]`);
+      const title = el.getAttribute('aria-label') || (lab ? [...lab.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim() : '') || 'Choose one';
+      const chosen = await pickOption({ title, options, value: current, trigger: el });
+      if (chosen == null || chosen === current) return;
+      current = chosen; draw();
+      onChange?.(chosen);
+    });
     return el;
   };
 }
