@@ -1,5 +1,5 @@
 // Settings panel: put Apex on the home screen or desktop so it opens like an app, even with no connection.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { icon } from './icons.js';
 import { installState, onInstallChange, promptInstall } from '../pwa.js';
 
@@ -16,7 +16,7 @@ export function installPanel({ toast }) {
   const box = h('section', { class: 'panel stack' }, h('h2', {}, 'Install Apex'), text, row);
   const paint = (state = installState()) => {
     text.textContent = WORDS[state];
-    row.replaceChildren();
+    fill(row, );
     if (state === 'ready') row.append(h('button', { class: 'btn', type: 'button', onclick: async () => {
       const r = await promptInstall();
       if (r === 'accepted') toast('Apex is being added to your device.');

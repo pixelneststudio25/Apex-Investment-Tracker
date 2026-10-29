@@ -1,4 +1,4 @@
-import { h, svg } from './dom.js';
+import { fill, h, svg } from './dom.js';
 import { icon } from './icons.js';
 import { greeting } from './fmt.js';
 import { prefersReducedMotion } from './motion.js';
@@ -43,13 +43,13 @@ function pinPad({ subtitle, onEntered, emblem, extraKey }) {
 
   const setMsg = (text, cls, sr) => {
     msg.className = 'pin-msg' + (cls ? ` pin-msg--${cls}` : '');
-    msg.replaceChildren(text, sr ? h('span', { class: 'sr-only' }, ` ${sr}`) : null);
+    fill(msg, text, sr ? h('span', { class: 'sr-only' }, ` ${sr}`) : null);
   };
 
   const api = {
     setMessage(text, isError = false) { setMsg(text, isError ? 'error' : ''); },
     // Spinner beside the message and a wave across the dots while work is happening.
-    setBusy(text) { msg.className = 'pin-msg pin-msg--busy'; msg.replaceChildren(h('span', { class: 'spinner', 'aria-hidden': 'true' }), text); dotsRow.classList.add('busy'); },
+    setBusy(text) { msg.className = 'pin-msg pin-msg--busy'; fill(msg, h('span', { class: 'spinner', 'aria-hidden': 'true' }), text); dotsRow.classList.add('busy'); },
     clear() { value = ''; dotsRow.classList.remove('busy'); render(); },
     // Wrong PIN: dots flash red and shake, a double buzz, then the dots empty. `sr` is extra text for screen readers only.
     fail(text, sr) {
@@ -61,7 +61,7 @@ function pinPad({ subtitle, onEntered, emblem, extraKey }) {
     // Right PIN: green dots and a check, the lock opens and the bloom spreads. Resolves when the moment is over (at once with reduced motion).
     success(text = 'Unlocked') {
       dotsRow.classList.remove('busy'); dotsRow.classList.add('ok');
-      msg.className = 'pin-msg pin-msg--ok'; msg.replaceChildren(h('span', { class: 'pin-check', 'aria-hidden': 'true' }, icon('check')), text);
+      msg.className = 'pin-msg pin-msg--ok'; fill(msg, h('span', { class: 'pin-check', 'aria-hidden': 'true' }, icon('check')), text);
       haptic([12, 50, 12]);
       emblem?.classList.add('open');
       if (prefersReducedMotion()) return Promise.resolve();

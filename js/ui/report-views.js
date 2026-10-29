@@ -1,6 +1,7 @@
 // Phase 7 screens: Projections, Export, and the printable Statement. The rules live in js/models/projections.js and
 // js/models/export.js (both tested); this file only draws forms and tables. No inline styles, no innerHTML.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
+import { backToOrigin } from './nav.js';
 import { icon } from './icons.js';
 import { setBusy } from './motion.js';
 import { lineChart } from './charts.js';
@@ -60,12 +61,14 @@ function projTable(label, rows, showPay) {
 async function projectionChooser({ ctx }) {
   const today = todayISO();
   const live = (await ctx.pf.overview(today)).filter((it) => !it.error && it.metrics.basis !== 'realized');
+  const home = backToOrigin();
   const head = h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Projections'));
+  const backUp = backLink(home.href, home.text);
   const intro = h('p', { class: 'sub' }, 'A projection shows what an investment could be worth later if a rate you choose holds. It is a what-if, not a fact, and nothing you try here is saved.');
-  if (!live.length) return h('div', { class: 'flow' }, head, intro, h('div', { class: 'empty' }, h('span', { class: 'empty-art' }, icon('chart', { size: 30 })), h('h2', {}, 'Nothing to project yet'),
+  if (!live.length) return h('div', { class: 'flow' }, backUp, head, intro, h('div', { class: 'empty' }, h('span', { class: 'empty-art' }, icon('chart', { size: 30 })), h('h2', {}, 'Nothing to project yet'),
     h('p', {}, 'Add an investment that is still open, then come back here to look ahead.'), h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/new' }, icon('plus'), 'Add investment'))));
   const all = h('a', { class: 'panel row-line all-card', href: '#/projections/all' }, h('span', { class: 'tile tint-2' }, icon('chart')), h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, 'Whole portfolio'), h('div', { class: 'row-sub' }, `${plural(live.length, 'open investment', 'open investments')} added up`)), h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(live.reduce((t, it) => t + it.metrics.valueKobo, 0))), h('span', { class: 'row-sub' }, 'worth today')));
-  return h('div', { class: 'flow' }, head, intro, all, h('section', { 'aria-label': 'Choose an investment' }, sectionHead('Choose an investment'),
+  return h('div', { class: 'flow' }, backUp, head, intro, all, h('section', { 'aria-label': 'Choose an investment' }, sectionHead('Choose an investment'),
     h('div', { class: 'panel panel--flush' }, h('ul', { class: 'rows' }, live.map(({ investment: inv, metrics: m }) => {
       const c = ctx.cat(inv.categoryId);
       return h('li', {}, h('a', { class: 'row-line', href: `#/projections/${inv.id}` }, h('span', { class: 'tile tint-1' }, icon(c.icon)),
@@ -104,7 +107,7 @@ async function projectionScreen({ ctx }, id) {
     hasPlans && checkbox({ label: 'Include the regular payments still expected (rent and costs you set up)', checked: true, onChange: (v) => { include = v; } }),
     h('div', { class: 'row' }, submit));
   const results = h('div', { class: 'flow', 'aria-live': 'polite' });
-  const put = (...kids) => results.replaceChildren(...kids.flat().filter(Boolean)); // replaceChildren would print `false` for a skipped piece
+  const put = (...kids) => fill(results, ...kids.flat().filter(Boolean)); // replaceChildren would print `false` for a skipped piece
 
   // ----- the answer -----
   function draw(out) {
@@ -114,8 +117,8 @@ async function projectionScreen({ ctx }, id) {
     const last = out.a.rows[out.a.rows.length - 1];
     const readout = h('p', { class: 'readout' });
     const say = (p) => h('span', {}, `${fmtDate(p.date)}: `, h('strong', {}, `${out.a.scenario.label} `), amt(p.a, { compact: true }), out.b && [', ', h('strong', {}, `${out.b.scenario.label} `), amt(p.b, { compact: true })]);
-    readout.replaceChildren(say(pts[pts.length - 1]));
-    const chart = lineChart({ points: pts, onHover: (p) => readout.replaceChildren(say(p || pts[pts.length - 1])),
+    fill(readout, say(pts[pts.length - 1]));
+    const chart = lineChart({ points: pts, onHover: (p) => fill(readout, say(p || pts[pts.length - 1])),
       description: `Line chart of projected worth from today to ${fmtDate(last.endDate)}. ${out.a.scenario.label} reaches ${money(last.valueKobo)}${out.b ? `, ${out.b.scenario.label} reaches ${money(out.b.rows[out.b.rows.length - 1].valueKobo)}` : ''}. This is a projection, not a fact.` });
     put(
       h('p', { class: 'note-box' }, 'These are projections, not facts. Each one assumes the rate you typed holds every year and that nothing else changes. Apex does not save them, and they never appear in your real figures.'),
@@ -163,9 +166,9 @@ async function projectionScreen({ ctx }, id) {
 
 // ================= Projections: the whole portfolio =================
 async function portfolioScreen({ ctx }) {
-  const today = todayISO(), back = '#/projections';
+  const today = todayISO(), home = backToOrigin();
   const items = await loadReport(ctx.pf, today), { open, broken, closedCount } = splitItems(items);
-  if (!open.length) return h('div', { class: 'flow' }, backLink(back, 'Projections'), h('h1', { class: 'page-title' }, 'Whole portfolio'), h('p', { class: 'note-box' }, 'There is no open investment to project yet.'));
+  if (!open.length) return h('div', { class: 'flow' }, backLink(home.href, home.text), h('h1', { class: 'page-title' }, 'Whole portfolio'), h('p', { class: 'note-box' }, 'There is no open investment to project yet.'));
   const start = open.reduce((t, it) => t + it.metrics.valueKobo, 0), hasPlans = open.some((it) => it.bundle.schedules.some((x) => x.status === 'active'));
   const A = scenarioCard('Scenario A', { ...blankScenario('Scenario A'), label: 'Scenario A' }, 'Leave this empty to use each investment at its own saved rate. Type a rate to use one rate for all of them.');
   const B = scenarioCard('Scenario B (optional)', blankScenario('Scenario B'), 'Optional. One rate applied to every open investment, to compare with Scenario A.');
@@ -175,7 +178,7 @@ async function portfolioScreen({ ctx }) {
   const form = h('form', { class: 'stack', novalidate: true }, h('div', { class: 'scen-grid' }, A.el, B.el), years.el,
     hasPlans && checkbox({ label: 'Include the regular payments still expected (rent and costs you set up)', checked: true, onChange: (v) => { include = v; } }), h('div', { class: 'row' }, submit));
   const results = h('div', { class: 'flow', 'aria-live': 'polite' });
-  const put = (...kids) => results.replaceChildren(...kids.flat().filter(Boolean));
+  const put = (...kids) => fill(results, ...kids.flat().filter(Boolean));
   const tag = h('span', { class: 'chip' }, 'Projection');
   const ownLabel = (p) => (p.flat ? 'No rate set, held flat' : `${p.scenario.direction === 'loses' ? 'Loses' : 'Grows'} ${p.scenario.percentText}% a year`);
 
@@ -185,8 +188,8 @@ async function portfolioScreen({ ctx }) {
     const pts = [{ date: today, a: out.startKobo, ...(out.b ? { b: out.startKobo } : {}) }, ...out.a.rows.map((r, i) => ({ date: r.endDate, a: r.valueKobo, ...(out.b ? { b: out.b.rows[i].valueKobo } : {}) }))];
     const readout = h('p', { class: 'readout' });
     const say = (p) => h('span', {}, `${fmtDate(p.date)}: `, h('strong', {}, `${aName} `), amt(p.a, { compact: true }), out.b && [', ', h('strong', {}, `${bName} `), amt(p.b, { compact: true })]);
-    readout.replaceChildren(say(pts[pts.length - 1]));
-    const chart = lineChart({ points: pts, onHover: (p) => readout.replaceChildren(say(p || pts[pts.length - 1])), description: `Line chart of the projected worth of your whole portfolio from today to ${fmtDate(last.endDate)}. ${aName} reaches ${money(last.valueKobo)}. This is a projection, not a fact.` });
+    fill(readout, say(pts[pts.length - 1]));
+    const chart = lineChart({ points: pts, onHover: (p) => fill(readout, say(p || pts[pts.length - 1])), description: `Line chart of the projected worth of your whole portfolio from today to ${fmtDate(last.endDate)}. ${aName} reaches ${money(last.valueKobo)}. This is a projection, not a fact.` });
     const far = out.a.rows[out.a.rows.length - 1];
     put(h('p', { class: 'note-box' }, 'These are projections, not facts. Each open investment starts from what it is worth today, and nothing else changes. Shared investments count at their full value, the same as on Home. Apex does not save these figures.'),
       out.flat.length > 0 && h('p', { class: 'note-box' }, `${plural(out.flat.length, 'investment has', 'investments have')} no rate set, so ${out.flat.length === 1 ? 'it is' : 'they are'} held flat at the worth today: ${out.flat.join(', ')}. Type a rate in Scenario A to use one rate for everything.`),
@@ -221,7 +224,7 @@ async function portfolioScreen({ ctx }) {
   }
   form.addEventListener('submit', (e) => { e.preventDefault(); setBusy(submit, true); try { calc(); } finally { setBusy(submit, false); } });
   calc();
-  return h('div', { class: 'flow' }, backLink(back, 'Projections'),
+  return h('div', { class: 'flow' }, backLink(home.href, home.text),
     h('div', { class: 'detail-head' }, h('span', { class: 'tile tile--large tint-2' }, icon('chart', { size: 28 })), h('div', {}, h('h1', { class: 'page-title' }, 'Whole portfolio'), h('p', { class: 'sub' }, `${plural(open.length, 'open investment', 'open investments')}, worth ${money(start, { compact: false })} today`))),
     h('p', { class: 'sub' }, 'See where everything could be later. By default each investment uses its own saved rate. This is a what-if: nothing here is saved or counted in your real figures.'),
     h('section', { class: 'panel stack' }, form), results);
@@ -288,7 +291,7 @@ async function statementScreen({ ctx, showAmounts }, investmentId) {
     dateErr.textContent = '';
     items = await loadReport(ctx.pf, asOf);
     if (only && !items.some((it) => it.investment.id === only)) only = null;
-    doc.replaceChildren(...(await drawDoc()));
+    fill(doc, ...(await drawDoc()));
   }
   async function drawDoc() {
     const st = await buildStatement(ctx.pf, items, asOf, { investmentId: only, includeLedger });
@@ -321,7 +324,7 @@ async function statementScreen({ ctx, showAmounts }, investmentId) {
   const which = field('Show', selectInput({ value: only || '', options: [['', 'All investments'], ...items.map((it) => [it.investment.id, it.investment.name])], onChange: (v) => { only = v || null; refresh(); } }));
   const ledgerBox = checkbox({ label: 'Include every entry and valuation', checked: false, onChange: (v) => { includeLedger = v; refresh(); } });
   const print = h('button', { class: 'btn', type: 'button', onclick: () => window.print() }, icon('doc'), 'Print or save as PDF');
-  doc.replaceChildren(...(await drawDoc()));
+  fill(doc, ...(await drawDoc()));
   return h('div', { class: 'flow statement-page' }, h('div', { class: 'no-print' }, backLink('#/export', 'Export and print')), head(print),
     h('section', { class: 'panel stack no-print' }, h('div', { class: 'stmt-controls' }, dateIn.el, which.el), dateErr, ledgerBox,
       h('p', { class: 'sub' }, 'Choose Print or save as PDF, then pick a printer or Save as PDF in the window that opens. The menus and buttons on this screen are left off the page.')),

@@ -1,6 +1,6 @@
 // Screens for backup and sync: the small status chip at the top, and the "Backup and sync" panel in Settings.
 // The wording is the whole point here: it always says plainly whether your records are safe online.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { icon } from './icons.js';
 import { withBusy } from './motion.js';
 
@@ -58,7 +58,7 @@ export function syncPanel({ sync, toast, actions }) {
   const say = (text, tone = 'ok') => { result.hidden = !text; result.textContent = text || ''; result.dataset.tone = tone; };
   const dot = h('span', { class: 'sync-dot', 'data-tone': 'idle', 'aria-hidden': 'true' });
   const paint = (s) => {
-    const d = describeStatus(s); status.replaceChildren(dot, h('strong', {}, d.label)); dot.dataset.tone = d.tone; detail.textContent = d.detail;
+    const d = describeStatus(s); fill(status, dot, h('strong', {}, d.label)); dot.dataset.tone = d.tone; detail.textContent = d.detail;
   };
 
   const backUp = h('button', { class: 'btn', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => {

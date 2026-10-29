@@ -1,5 +1,5 @@
 import { AuthError } from '../core/auth.js';
-import { h, svg } from './dom.js';
+import { fill, h, svg } from './dom.js';
 import { icon } from './icons.js';
 import { stagger, withBusy } from './motion.js';
 
@@ -14,7 +14,7 @@ function field({ id, label, type = 'text', autocomplete, hint, value, readonly, 
       const show = input.type === 'password';
       input.type = show ? 'text' : 'password';
       eye.setAttribute('aria-pressed', String(show)); eye.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-      eye.replaceChildren(icon(show ? 'eyeOff' : 'eye'));
+      fill(eye, icon(show ? 'eyeOff' : 'eye'));
     });
     control = h('div', { class: 'input-wrap' }, input, eye);
   }
@@ -117,7 +117,7 @@ export function ceremonyView({ recoveryKey, onDone }) {
   copyBtn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText(recoveryKey); copied.textContent = 'Copied. Paste it somewhere safe, then clear your clipboard.';
-      copyBtn.replaceChildren(icon('check'), 'Copied'); setTimeout(() => copyBtn.replaceChildren(icon('copy'), 'Copy'), 2200);
+      fill(copyBtn, icon('check'), 'Copied'); setTimeout(() => fill(copyBtn, icon('copy'), 'Copy'), 2200);
     } catch { copied.textContent = 'Copy failed. Please save the file instead.'; }
   });
 
@@ -177,7 +177,7 @@ export function loginView({ email = '', notice, onSubmit, onResend, onCreate, on
     onForgot && h('button', { class: 'link-btn', type: 'button', onclick: () => onForgot(e.input.value) }, 'Forgot your password?'),
     onCreate && h('button', { class: 'link-btn', type: 'button', onclick: onCreate }, 'Create an account'));
   return wireForm(form, btn, box, 'Unlocking…', async () => {
-    extra.replaceChildren();
+    fill(extra, );
     try { await onSubmit({ email: e.input.value, password: p.input.value }); }
     catch (err) {
       if (err instanceof AuthError && err.code === 'EMAIL_NOT_CONFIRMED') {
@@ -203,7 +203,7 @@ export function forgotView({ email = '', onSubmit, onBack }) {
   wireForm(form, btn, box, 'Sending…', async () => {
     if (!e.input.checkValidity()) throw invalid('Please enter a valid email address.');
     await onSubmit(e.input.value);
-    sent.replaceChildren(h('p', {}, 'If an account exists for ', h('strong', {}, e.input.value.trim()), ', a reset link is on its way. Open it in this browser if you can.'));
+    fill(sent, h('p', {}, 'If an account exists for ', h('strong', {}, e.input.value.trim()), ', a reset link is on its way. Open it in this browser if you can.'));
     sent.hidden = false; btn.hidden = true;
   });
   return h('section', {}, form, sent);

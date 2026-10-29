@@ -1,7 +1,7 @@
 // The signed-in workspace: navigation, dashboard, investments, investment detail and settings.
 // Read-only for investments in this release (adding and editing come next). Everything is calculated by the
 // engine through js/models/portfolio.js; this file only arranges and words it.
-import { h, svg } from './dom.js';
+import { fill, h, svg } from './dom.js';
 import { animateNumber, currentTheme, enter, prefersReducedMotion, setBusy, toggleTheme, withBusy } from './motion.js';
 import { slideThumb } from './formkit.js';
 import { confirmDialog } from './dialog.js';
@@ -23,6 +23,7 @@ import { reportView } from './report-views.js';
 import { documentView, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
 import { SETTINGS_SECTIONS, settingsView } from './settings-views.js';
+import { noteRoute, tabForShared } from './nav.js';
 import { humanizeKey } from '../models/categories.js';
 import { dueUnrecorded } from '../models/manage.js';
 import { HELP_ROUTE, helpSearchItems } from '../models/help-content.js';
@@ -179,7 +180,7 @@ export function mountWorkspace({ data, email, actions }) {
     const who = settings?.displayName || String(email || '').split('@')[0] || 'You';
     avatar.textContent = initials(who); userName.textContent = who; userSub.textContent = settings?.portfolioName || 'Encrypted on this device';
     const hidden = !!settings?.hideAmounts;
-    hideBtn.replaceChildren(icon(hidden ? 'eyeOff' : 'eye'));
+    fill(hideBtn, icon(hidden ? 'eyeOff' : 'eye'));
     hideBtn.setAttribute('aria-label', hidden ? 'Show amounts' : 'Hide amounts');
     hideBtn.setAttribute('aria-pressed', String(hidden));
     hideBtn.title = hidden ? 'Show amounts' : 'Hide amounts';
@@ -382,12 +383,12 @@ export function mountWorkspace({ data, email, actions }) {
         ranges.forEach(([, m], i) => range.children[i].setAttribute('aria-pressed', String(m === months)));
         const from = months ? addMonths(asOf, -months) : '0000-00-00';
         const pts = tl.filter((p) => p.date >= from).map((p) => ({ date: p.date, a: p.valueKobo, b: p.putInKobo }));
-        if (pts.length < 2) { readout.replaceChildren(); box.replaceChildren(h('p', { class: 'sub chart-empty' }, 'Not enough history in this range yet. Try a longer one.')); return; }
+        if (pts.length < 2) { fill(readout, ); fill(box, h('p', { class: 'sub chart-empty' }, 'Not enough history in this range yet. Try a longer one.')); return; }
         const say = (p) => h('span', {}, fmtDate(p.date), ': worth ', h('strong', {}, amt(p.a)), ', money put in ', h('strong', {}, amt(p.b)));
         const last = pts[pts.length - 1];
-        readout.replaceChildren(say(last));
-        box.replaceChildren(lineChart({ points: pts, description: `Line chart of what your investments were worth over time, from ${fmtDate(pts[0].date)} to ${fmtDate(last.date)}. Latest: worth ${money(last.a)}, money put in ${money(last.b)}.`,
-          onHover: (p) => readout.replaceChildren(say(p || last)) }));
+        fill(readout, say(last));
+        fill(box, lineChart({ points: pts, description: `Line chart of what your investments were worth over time, from ${fmtDate(pts[0].date)} to ${fmtDate(last.date)}. Latest: worth ${money(last.a)}, money put in ${money(last.b)}.`,
+          onHover: (p) => fill(readout, say(p || last)) }));
       };
       ranges.forEach(([label, m]) => range.append(h('button', { type: 'button', 'aria-pressed': 'false', onclick: () => draw(m) }, label)));
       slideThumb(range);
@@ -496,7 +497,7 @@ export function mountWorkspace({ data, email, actions }) {
         if (first) rise(li, Math.min(n, 8) * 0.6);
         return li;
       })) : noMatch();
-      listBox.replaceChildren(ul);
+      fill(listBox, ul);
       first = false;
       [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
     };
@@ -596,7 +597,7 @@ export function mountWorkspace({ data, email, actions }) {
     const tabsList = [['overview', 'Overview'], ['ledger', 'Ledger'], partners && ['people', 'People'], ['details', 'Details']].filter(Boolean);
     const body = h('div', { role: 'tabpanel' });
     const tabs = h('div', { class: 'tabs', role: 'tablist' });
-    const pick = (key) => { const panel = panels[key](); panel.classList.add('fade-in'); body.replaceChildren(panel); [...tabs.children].forEach((t) => t.setAttribute('aria-selected', String(t.dataset.k === key))); };
+    const pick = (key) => { const panel = panels[key](); panel.classList.add('fade-in'); fill(body, panel); [...tabs.children].forEach((t) => t.setAttribute('aria-selected', String(t.dataset.k === key))); };
     tabsList.forEach(([k, l]) => tabs.append(h('button', { type: 'button', role: 'tab', 'data-k': k, 'aria-selected': 'false', onclick: () => pick(k) }, l)));
     pick('overview');
     indicator(tabs, '[aria-selected="true"]');
@@ -691,13 +692,16 @@ export function mountWorkspace({ data, email, actions }) {
     quiet = keepScroll;
     const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
     const page = parts[0] || 'home';
-    const key = page === 'investments' || page === 'new' || page === 'projections' ? 'investments' : page === 'settings' || page === 'help' || page === 'reminders' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
+    noteRoute(parts);
+    // Help and Projections can be reached from Home or from Settings: the tab (and their back link) follow where you came from.
+    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'help' || page === 'projections' ? tabForShared()
+      : page === 'settings' || page === 'reminders' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
     root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2) || (page === 'categories' && parts.length >= 2));
     outlet.setAttribute('aria-busy', 'true');
     // The skeleton only appears if loading takes a moment, so quick pages do not flash.
-    const wait = keepScroll ? null : setTimeout(() => { if (mine === token) outlet.replaceChildren(skeletonFor(key)); }, 140);
+    const wait = keepScroll ? null : setTimeout(() => { if (mine === token) fill(outlet, skeletonFor(key)); }, 140);
     try {
       const ctx = await load();
       ctxCache = ctx;
@@ -715,12 +719,12 @@ export function mountWorkspace({ data, email, actions }) {
       else view = await homeView(ctx);
       if (mine !== token) return;
       paintChrome(key);
-      outlet.replaceChildren(view);
+      fill(outlet, view);
       if (!keepScroll && !view.dataset?.noenter) enter(view);
       if (keepScroll) window.scrollTo({ top: keepY, left: 0, behavior: 'instant' }); else window.scrollTo(0, 0);
     } catch (e) {
       if (mine !== token || (e instanceof StoreError && e.code === 'LOCKED')) return;
-      outlet.replaceChildren(h('p', { class: 'alert alert--error', role: 'alert' }, e instanceof StoreError || e.code === 'INVALID' ? e.message : 'Something went wrong while reading your records. Reload the page and try again.'));
+      fill(outlet, h('p', { class: 'alert alert--error', role: 'alert' }, e instanceof StoreError || e.code === 'INVALID' ? e.message : 'Something went wrong while reading your records. Reload the page and try again.'));
       console.error(e);
     } finally {
       clearTimeout(wait);

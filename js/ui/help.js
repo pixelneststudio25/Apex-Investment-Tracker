@@ -6,6 +6,7 @@
 //   helpView({ parts, investments, sample, shortcut, addSample, openSearch }) -> element
 //   parts: the route after "#/", for example ['help'], ['help', 'numbers'], ['help', 'glossary', 'roi']
 import { h } from './dom.js';
+import { backToOrigin } from './nav.js';
 import { icon } from './icons.js';
 import { fmtDate } from './fmt.js';
 import { prefersReducedMotion } from './motion.js';
@@ -159,7 +160,7 @@ function homeView(o) {
     h('li', {}, h('a', { class: 'help-card', href: HELP_ROUTE.faq }, h('span', { class: 'tile tint-5' }, icon('help')),
       h('span', { class: 'help-card-text' }, h('span', { class: 'help-card-title' }, 'Common questions'), h('span', { class: 'help-card-sub' }, `${FAQ.length} real questions, answered straight.`)), icon('chevronRight', { size: 18 }))));
   return h('div', { class: 'flow help' },
-    backLink('Home', '#/'),
+    backLink(backToOrigin().text, backToOrigin().href),
     h('header', { class: 'help-head' }, h('h1', { class: 'page-title' }, HELP_HOME.title), h('p', { class: 'lead' }, HELP_HOME.lead), search),
     startCard,
     h('section', {}, sectionHead('Topics'), grid),

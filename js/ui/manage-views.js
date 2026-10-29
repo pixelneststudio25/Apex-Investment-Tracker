@@ -1,7 +1,7 @@
 // Screens for changing what is already saved: edit an investment, manage its regular payments, see and restore
 // earlier versions, change who shares it, reminders, and recently deleted items. The rules live in
 // js/models/manage.js; this file draws the forms and saves the result.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { setBusy, withBusy } from './motion.js';
 import { icon } from './icons.js';
 import { confirmDialog } from './dialog.js';
@@ -57,13 +57,13 @@ async function editInvestment({ ctx, toast, go }, invId) {
   function drawRates() {
     for (const k of Object.keys(reg)) if (k === 'rates' || k.startsWith('rates.')) delete reg[k];
     if (!RATE_BASED.includes(draft.valueChange)) {
-      ratesBox.replaceChildren(draft.rates.length ? h('p', { class: 'note-box' }, `The ${plural(draft.rates.length, 'rate', 'rates')} set earlier will be removed when you save, because this way of valuing it does not use a rate.`) : '');
+      fill(ratesBox, draft.rates.length ? h('p', { class: 'note-box' }, `The ${plural(draft.rates.length, 'rate', 'rates')} set earlier will be removed when you save, because this way of valuing it does not use a rate.`) : '');
       return;
     }
     const verb = draft.valueChange === 'depreciation' ? 'How much it loses' : draft.valueChange === 'interest' ? 'Interest rate' : 'How much it grows';
     const general = h('p', { class: 'alert alert--error', role: 'alert', hidden: true });
     reg.rates = { setError: (m) => { general.textContent = m || ''; general.hidden = !m; }, control: general };
-    ratesBox.replaceChildren(general,
+    fill(ratesBox, general,
       ...draft.rates.map((r, i) => h('section', { class: 'person' },
         h('div', { class: 'person-head' }, h('h2', {}, draft.rates.length > 1 ? `Rate ${i + 1}` : 'The rate'), (draft.rates.length > 1 || draft.valueChange !== 'interest') && h('button', { class: 'link-btn', type: 'button', onclick: () => { draft.rates.splice(i, 1); drawRates(); } }, 'Remove')),
         h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'Where does it come from?'), segmented({ label: 'Rate source', value: r.type, options: [['assumed', 'My own assumption'], ['agreed', 'Agreed with someone']], onChange: (v) => { r.type = v; } })),
@@ -132,7 +132,7 @@ async function scheduleForm({ ctx, toast, go }, invId) {
   const err = errorLine(), reg = {};
   const F = (key, label, make, opts) => { const f = field(label, make, opts); reg[key] = f; return f.el; };
   const money_ = (key, label, o) => { const f = moneyField(label, o); reg[key] = f; return f.el; };
-  const everyBox = h('div', {}), drawEvery = () => { everyBox.replaceChildren(d.frequency === 'custom' ? F('everyDays', 'Number of days between payments', textInput({ value: d.everyDays, inputmode: 'numeric', onInput: (v) => { d.everyDays = v; } })) : ''); };
+  const everyBox = h('div', {}), drawEvery = () => { fill(everyBox, d.frequency === 'custom' ? F('everyDays', 'Number of days between payments', textInput({ value: d.everyDays, inputmode: 'numeric', onInput: (v) => { d.everyDays = v; } })) : ''); };
   drawEvery();
   const form = h('form', { class: 'stack', novalidate: true },
     h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'What kind of payment?'), segmented({ label: 'Income or cost', value: d.kind, options: [['income', 'Money coming to me (rent)'], ['cost', 'A regular cost']], onChange: (v) => { d.kind = v; } })),
@@ -156,7 +156,7 @@ async function scheduleManage(env, invId, sid) {
   const root = h('div', { class: 'flow' });
   async function paint() {
     const [inv, s0] = await Promise.all([store.get(invId), store.get(sid)]);
-    if (!inv || inv.type !== 'investment' || !s0 || s0.type !== 'schedule' || s0.investmentId !== invId) { root.replaceChildren(notFound(`${back}/schedule`, 'Regular payments', 'This regular payment')); return; }
+    if (!inv || inv.type !== 'investment' || !s0 || s0.type !== 'schedule' || s0.investmentId !== invId) { fill(root, notFound(`${back}/schedule`, 'Regular payments', 'This regular payment')); return; }
     const s = s0, today = todayISO(), entries = (await store.list('entry')).filter((e) => e.investmentId === invId);
     const isIncome = s.kind === 'income', verb = isIncome ? 'received' : 'paid';
     const act = (btnText, fn, { cls = 'btn btn--secondary btn--small' } = {}) => h('button', { class: cls, type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => { try { await fn(); await paint(); } catch (err) { toast(saveFailed(err)); } }) }, btnText);
@@ -173,7 +173,7 @@ async function scheduleManage(env, invId, sid) {
     // --- the payment itself ---
     const d = scheduleDraft(s), reg = {}, err = errorLine();
     const F = (key, label, make, opts) => { const f = field(label, make, opts); reg[key] = f; return f.el; };
-    const everyBox = h('div', {}), drawEvery = () => { everyBox.replaceChildren(d.frequency === 'custom' ? F('everyDays', 'Number of days between payments', textInput({ value: d.everyDays, inputmode: 'numeric', onInput: (v) => { d.everyDays = v; } })) : ''); };
+    const everyBox = h('div', {}), drawEvery = () => { fill(everyBox, d.frequency === 'custom' ? F('everyDays', 'Number of days between payments', textInput({ value: d.everyDays, inputmode: 'numeric', onInput: (v) => { d.everyDays = v; } })) : ''); };
     drawEvery();
     const amountF = moneyField('Amount each time', { value: d.amount, onInput: (v) => { d.amount = v; } }); reg.amount = amountF;
     const editForm = h('form', { class: 'stack', novalidate: true },
@@ -213,7 +213,7 @@ async function scheduleManage(env, invId, sid) {
       go(`${back}/schedule`);
     } }, 'Delete this regular payment'));
 
-    root.replaceChildren(backLink(`${back}/schedule`, 'Regular payments'), h('div', {}, h('h1', { class: 'page-title' }, s.label || (isIncome ? 'Regular income' : 'Regular cost')), h('p', { class: 'sub' }, `${inv.name}. ${sentence(s)}.`)),
+    fill(root, backLink(`${back}/schedule`, 'Regular payments'), h('div', {}, h('h1', { class: 'page-title' }, s.label || (isIncome ? 'Regular income' : 'Regular cost')), h('p', { class: 'sub' }, `${inv.name}. ${sentence(s)}.`)),
       dueSection, h('section', { class: 'stack' }, h('h2', {}, 'Change it'), editForm), skipSection, incSection, stopSection, h('section', { class: 'stack' }, h('h2', {}, 'Delete'), h('p', { class: 'sub' }, 'Removes the schedule only. Entries you already recorded stay in the ledger. You can undo straight afterwards.'), del));
   }
   await paint();
@@ -251,7 +251,7 @@ async function historyView({ ctx, toast, go, actions }, invId, recordId) {
   const root = h('div', { class: 'flow' });
   async function paint() {
     let versions;
-    try { versions = await store.history(id); } catch (e) { root.replaceChildren(notFound(back, 'Back to the investment', 'This record')); return; }
+    try { versions = await store.history(id); } catch (e) { fill(root, notFound(back, 'Back to the investment', 'This record')); return; }
     const cur = versions[versions.length - 1], rec = cur.record, kindName = rec.type === 'investment' ? 'investment' : rec.type === 'entry' ? 'ledger entry' : rec.type;
     const restore = async (v) => {
       const yes = await confirmDialog({ title: `Restore version ${v.version}?`, body: `Version ${v.version} becomes the current one, saved as a new version. Nothing is lost: the version you have now stays in the history, so you can switch back.`, confirmLabel: 'Restore' });
@@ -269,7 +269,7 @@ async function historyView({ ctx, toast, go, actions }, invId, recordId) {
         v.unreadable ? h('p', { class: 'sub' }, 'This version could not be read.') : h('ul', { class: 'diff' }, summarise(prev?.record, v.record).map((t) => h('li', {}, t))),
         !v.current && !v.unreadable && h('div', { class: 'row' }, h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: () => restore(v) }, icon('undo', { size: 16 }), 'Restore this version')));
     });
-    root.replaceChildren(backLink(back, 'Back to the investment'), h('div', {}, h('h1', { class: 'page-title' }, 'Change history'), h('p', { class: 'sub' }, `This ${kindName}${rec.name ? `: ${rec.name}` : ''}. Every save is kept, newest first.`)),
+    fill(root, backLink(back, 'Back to the investment'), h('div', {}, h('h1', { class: 'page-title' }, 'Change history'), h('p', { class: 'sub' }, `This ${kindName}${rec.name ? `: ${rec.name}` : ''}. Every save is kept, newest first.`)),
       note && h('p', { class: 'note-box' }, note), h('ol', { class: 'versions' }, items));
   }
   await paint();
@@ -291,7 +291,7 @@ async function sharesView({ ctx, toast, go }, invId) {
   const drawRows = () => {
     for (const k of Object.keys(reg)) if (k.startsWith('rows')) delete reg[k];
     reg.rows = { setError: (m) => { general.textContent = m || ''; general.hidden = !m; }, control: general };
-    rowsBox.replaceChildren(...d.rows.map((r, i) => {
+    fill(rowsBox, ...d.rows.map((r, i) => {
       const used = new Set(d.rows.map((x, j) => (j === i ? null : x.ref))), pick = [['', 'Someone new'], ...partners.filter((p) => !used.has(p.id) || p.id === r.ref).map((p) => [p.id, p.name])];
       return h('section', { class: 'person' }, h('div', { class: 'person-head' }, h('h2', {}, r.ref === 'me' ? 'You' : r.name || `Person ${i + 1}`), r.ref !== 'me' && d.rows.length > 2 && h('button', { class: 'link-btn', type: 'button', onclick: () => { d.rows.splice(i, 1); drawRows(); drawTotals(); } }, 'Remove')),
         r.ref === '' && partners.length > 0 && F(`rows.${i}.ref`, 'Who is it?', selectInput({ value: r.ref, options: pick, onChange: (v) => { r.ref = v; const k = partners.find((p) => p.id === v); if (k) r.name = k.name; drawRows(); } })),
@@ -299,7 +299,7 @@ async function sharesView({ ctx, toast, go }, invId) {
         h('div', { class: 'row row--fields' }, F(`rows.${i}.share`, 'Share (%)', textInput({ value: r.share, inputmode: 'decimal', onInput: (v) => { r.share = v; drawTotals(); } })), (() => { const f = moneyField('Put in', { value: r.putIn, allowZero: true, onInput: (v) => { r.putIn = v; } }); reg[`rows.${i}.putIn`] = f; return f.el; })()));
     }));
   };
-  const dateBox = h('div', {}), drawDate = () => { dateBox.replaceChildren(d.mode === 'change' ? F('date', 'The shares changed on', dateInput({ value: d.date, onInput: (v) => { d.date = v; } }), { hint: 'The old shares apply up to this day, the new ones from it. Income received earlier keeps the old split.' }) : ''); };
+  const dateBox = h('div', {}), drawDate = () => { fill(dateBox, d.mode === 'change' ? F('date', 'The shares changed on', dateInput({ value: d.date, onInput: (v) => { d.date = v; } }), { hint: 'The old shares apply up to this day, the new ones from it. Income received earlier keeps the old split.' }) : ''); };
   drawRows(); drawTotals(); drawDate();
   const form = h('form', { class: 'stack', novalidate: true },
     h('div', { class: 'field' }, h('p', { class: 'field-label' }, 'What are you doing?'), choiceList({ name: 'mode', label: 'Fix or change', value: d.mode, onChange: (v) => { d.mode = v; drawDate(); },
@@ -327,7 +327,7 @@ async function remindersList({ ctx, toast, go }) {
     const row = (r) => h('li', {}, h('div', { class: 'row-line' }, h('span', { class: `date-col${!r.done && r.dueDate < today ? ' overdue' : ''}` }, fmtDate(r.dueDate)),
       h('a', { class: 'row-main row-link', href: `#/reminders/${r.id}` }, h('div', { class: 'row-title' }, r.text), h('div', { class: 'row-sub' }, [r.investmentId && name.get(r.investmentId), r.recurrence !== 'none' && RECURRENCE_CHOICES.find(([k]) => k === r.recurrence)[1].toLowerCase(), !r.done && r.dueDate < today && 'overdue'].filter(Boolean).join(', '))),
       !r.done && h('div', { class: 'row-end' }, h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => { await store.update(r.id, completeChange(r, today)); toast(r.recurrence === 'none' ? 'Marked done.' : 'Done. Next one set.'); await paint(); }) }, 'Done'))));
-    root.replaceChildren(h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Reminders'), h('a', { class: 'btn btn--small', href: '#/reminders/new' }, icon('plus'), 'Add a reminder')),
+    fill(root, backLink('#/settings', 'Settings'), h('div', { class: 'page-actions' }, h('h1', { class: 'page-title' }, 'Reminders'), h('a', { class: 'btn btn--small', href: '#/reminders/new' }, icon('plus'), 'Add a reminder')),
       active.length ? h('ul', { class: 'rows' }, active.map(row)) : h('div', { class: 'mini-empty' }, icon('calendar', { size: 20 }), h('span', {}, 'No reminders. Add one for a tax date, a lease renewal, a maturity or anything you might forget.')),
       done.length > 0 && h('details', { class: 'working' }, h('summary', {}, `Done (${done.length})`), h('ul', { class: 'rows' }, done.map(row))));
   }
@@ -383,7 +383,7 @@ async function deletedView({ ctx, toast }) {
   } }, 'Delete forever');
   async function paint() {
     const items = await deletedItems(store);
-    root.replaceChildren(h('h1', { class: 'page-title' }, 'Recently deleted'), h('p', { class: 'sub' }, 'Anything you delete is kept, so you can bring it back. Restoring an investment brings back everything recorded under it.'),
+    fill(root, backLink('#/settings', 'Settings'), h('h1', { class: 'page-title' }, 'Recently deleted'), h('p', { class: 'sub' }, 'Anything you delete is kept, so you can bring it back. Restoring an investment brings back everything recorded under it.'),
       items.length ? h('ul', { class: 'rows' }, items.map((it) => { const [title, sub] = nameOf(it); return h('li', {}, h('div', { class: 'row-line' }, h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, title), h('div', { class: 'row-sub' }, `${sub}. Deleted ${when(it.record.deletedAt)}`)),
         h('div', { class: 'row-end' }, h('button', { class: 'btn btn--secondary btn--small', type: 'button', onclick: (e) => withBusy(e.currentTarget, async () => { await store.restore(it.record.id); toast('Restored.'); await paint(); }) }, 'Restore'), forever(it)))); }))
         : h('div', { class: 'mini-empty' }, icon('checkCircle', { size: 20 }), h('span', {}, 'Nothing has been deleted.')));

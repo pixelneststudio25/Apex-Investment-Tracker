@@ -1,7 +1,7 @@
 // Motion helpers: busy buttons, count-up numbers, staggered lists, page and theme transitions.
 // Styles live in css/motion.css. Everything here respects "reduce motion" and never writes inline style attributes
 // (the site's content-security-policy blocks them), only CSS custom properties through the CSSOM.
-import { h, svg } from './dom.js';
+import { fill, h, svg } from './dom.js';
 
 export const prefersReducedMotion = () => !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -16,12 +16,12 @@ export function setBusy(btn, on) {
     if (idle.has(btn)) return;
     idle.set(btn, { nodes: [...btn.childNodes], disabled: btn.disabled });
     btn.style.setProperty('min-width', `${btn.offsetWidth}px`);
-    btn.replaceChildren(h('span', { class: 'btn-label' }, ...idle.get(btn).nodes), h('span', { class: 'spinner', 'aria-hidden': 'true' }));
+    fill(btn, h('span', { class: 'btn-label' }, ...idle.get(btn).nodes), h('span', { class: 'spinner', 'aria-hidden': 'true' }));
     btn.classList.add('is-busy'); btn.setAttribute('aria-busy', 'true'); btn.disabled = true;
   } else {
     const saved = idle.get(btn); if (!saved) return;
     idle.delete(btn);
-    btn.replaceChildren(...saved.nodes);
+    fill(btn, ...saved.nodes);
     btn.classList.remove('is-busy'); btn.removeAttribute('aria-busy'); btn.disabled = saved.disabled;
     btn.style.removeProperty('min-width');
   }

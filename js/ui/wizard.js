@@ -1,7 +1,7 @@
 // The add-investment wizard: one question group per screen, then a review where everything can be changed.
 // All rules (what is valid, which steps apply, what gets saved) live in js/models/wizard.js; this file only
 // draws the screens and passes what the person typed into the draft.
-import { h } from './dom.js';
+import { fill as setKids, h } from './dom.js';
 import { setBusy } from './motion.js';
 import { icon } from './icons.js';
 import { confirmDialog } from './dialog.js';
@@ -50,7 +50,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     const title = h('h1', { class: 'page-title wizard-title', tabindex: '-1' }, STEP_TITLES[step]);
     const body = ({ category, basics, details, money: moneyStep, value: valueStep, income: incomeStep, people: peopleStep, review })[step]();
     // One form, so pressing Enter in a field means Continue (or Save on the last screen).
-    root.replaceChildren(h('form', { class: 'flow wizard-form', novalidate: true, onsubmit: (e) => { e.preventDefault(); if (step === 'review') save(); else if (step !== 'category') next(); } },
+    setKids(root, h('form', { class: 'flow wizard-form', novalidate: true, onsubmit: (e) => { e.preventDefault(); if (step === 'review') save(); else if (step !== 'category') next(); } },
       h('div', { class: 'wizard-top' },
         h('button', { class: 'back back--btn', type: 'button', onclick: cancel }, icon('x', { size: 18 }), 'Cancel'),
         h('p', { class: 'wizard-count' }, h('strong', {}, idx + 1), ` of ${steps.length}`)),
@@ -166,7 +166,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
         const due = scheduleEntries({ amountKobo: parseNaira(s.amount), frequency: s.frequency, everyDays: s.frequency === 'custom' ? wholeNumber(s.everyDays) : null, startDate: checkDate(s.start), endDate: optionalDate(s.end), adjustments: [], skippedDates: [] }, today);
         if (due.length) info = { count: due.length, total: due.reduce((a, e) => a + e.amountKobo, 0) };
       } catch (e) { if (!(e instanceof InputError)) throw e; }
-      past.replaceChildren(info ? h('div', { class: 'stack' },
+      setKids(past, info ? h('div', { class: 'stack' },
         checkbox({ label: `Record the ${info.count} ${info.count === 1 ? 'payment' : 'payments'} already due (${money(info.total, { compact: false })} in total) as received`, checked: s.recordPast, onChange: (v) => { s.recordPast = v; } }),
         h('p', { class: 'hint' }, 'Leave this off if you would rather add each payment yourself when you receive it. Apex never assumes money arrived.')) : '');
     };
@@ -198,7 +198,7 @@ export function wizardView({ store, templates, partners, today, toast, go }) {
     };
     const drawRows = () => {
       for (const k of Object.keys(reg)) if (k.startsWith('people.')) delete reg[k];
-      rowsBox.replaceChildren(...rows.map((p, i) => {
+      setKids(rowsBox, ...rows.map((p, i) => {
         const used = new Set(rows.map((x, j) => (j === i ? null : x.ref)));
         const choices = [['', 'Someone new'], ...partners.filter((x) => !used.has(x.id)).map((x) => [x.id, x.name])];
         return h('section', { class: 'person' },

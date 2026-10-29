@@ -1,6 +1,6 @@
 // Screens for your own categories: the list, and one form to add or change one. The rules live in
 // js/models/categories.js (tested). No inline styles, no innerHTML.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { icon } from './icons.js';
 import { withBusy } from './motion.js';
 import { choiceList, field, selectInput, showErrors, textInput } from './formkit.js';
@@ -56,7 +56,7 @@ async function formScreen({ ctx, toast, go }, { id = null, startFrom = null, aft
   const list = h('div', { class: 'cat-fields' });
   const addDetail = h('button', { class: 'btn btn--secondary btn--small', type: 'button' }, icon('plus'), 'Add a detail');
   function drawFields(focusLast = false) {
-    list.replaceChildren(...draft.fields.map((f, i) => {
+    fill(list, ...draft.fields.map((f, i) => {
       const label = textInput({ value: f.label, onInput: (v) => { f.label = v; }, maxlength: 60, placeholder: 'For example: Plot size' })(`cat-f${i}`);
       label.setAttribute('aria-label', `Detail ${i + 1} name`);
       const type = selectInput({ value: f.type || 'text', options: FIELD_TYPES, onChange: (v) => { f.type = v; } })(`cat-t${i}`);

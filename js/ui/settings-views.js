@@ -14,6 +14,7 @@ import { installPanel } from './install-panel.js';
 import { HELP_ROUTE } from '../models/help-content.js';
 
 export const THEME_WORDS = { system: 'Match device', light: 'Light', dark: 'Dark' };
+const THEME_SHORT = { system: 'Auto', light: 'Light', dark: 'Dark' };
 export const LOCK_CHOICES = [['1', '1 minute of inactivity'], ['2', '2 minutes of inactivity'], ['5', '5 minutes of inactivity'], ['15', '15 minutes of inactivity'], ['0', 'Only when I lock it or close the app']];
 export const lockWord = (min) => (Number(min) === 0 ? 'Never' : `${Number(min)} min`);
 const SIZES = [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Largest']];
@@ -22,7 +23,7 @@ const SIZES = [[90, 'Smaller'], [100, 'Standard'], [115, 'Larger'], [130, 'Large
 export const SETTINGS_SECTIONS = {
   profile: ['Profile', 'users', 'name portfolio name email account'],
   appearance: ['Appearance', 'sun', 'theme dark light match device text size larger smaller'],
-  privacy: ['Amounts and privacy', 'eyeOff', 'hide amounts blur money balance'],
+  privacy: ['Amounts and privacy', 'eye', 'hide amounts blur money balance'],
   documents: ['Documents backup', 'paperclip', 'files attachments backup'],
   backup: ['Backup and sync', 'upload', 'sync cloud online restore download backup file'],
   device: ['This device', 'sliders', 'install app home screen sample portfolio'],
@@ -46,7 +47,7 @@ export async function settingsView(env, parts = []) {
   const who = () => S().displayName || String(email || '').split('@')[0] || 'You';
   const values = {};
   const setValue = (key, text) => { if (values[key]) values[key].textContent = text; };
-  const appearanceText = () => `${THEME_WORDS[getThemeMode()]} · ${S().textScale || 100}%`;
+  const appearanceText = () => `${THEME_SHORT[getThemeMode()]} · ${S().textScale || 100}%`;
   const hideText = () => (S().hideAmounts ? 'Hidden' : 'Shown');
 
   // ---------- the list ----------
@@ -70,7 +71,7 @@ export async function settingsView(env, parts = []) {
 
   const list = h('nav', { class: 'sx-list', 'aria-label': 'Settings' },
     me,
-    group('Preferences', [link('appearance', 'sun', 'Appearance', appearanceText()), link('privacy', 'eyeOff', 'Amounts and privacy', hideText())]),
+    group('Preferences', [link('appearance', 'sun', 'Appearance', appearanceText()), link('privacy', S().hideAmounts ? 'eyeOff' : 'eye', 'Amounts and privacy', hideText())]),
     group('Your data', [
       mk({ ic: 'tag', title: 'My categories', href: '#/categories' }),
       link('documents', 'paperclip', 'Documents backup', ''),
@@ -89,7 +90,7 @@ export async function settingsView(env, parts = []) {
     group('Account', [mk({ ic: 'arrowRight', title: 'Sign out', noChev: true, onclick: actions.onSignOut }), link('danger', 'alert', 'Danger zone', '', { danger: true })]));
 
   // ---------- the sections ----------
-  const head = (title) => h('div', { class: 'sx-head' }, h('a', { class: 'back sx-back', href: '#/settings' }, icon('chevronLeft', { size: 18 }), 'Settings'), h('h2', { class: 'sx-h' }, title));
+  const head = (title) => h('div', { class: 'sx-head' }, h('a', { class: 'back sx-back', href: '#/settings' }, icon('chevronLeft', { size: 18 }), 'Settings'), h(wide ? 'h2' : 'h1', { class: 'page-title sx-h' }, title));
 
   const profile = () => {
     const name = h('input', { class: 'input', id: 'displayName', value: S().displayName, maxlength: 80, autocomplete: 'name', placeholder: 'How should Apex greet you?' });
@@ -138,25 +139,26 @@ export async function settingsView(env, parts = []) {
     const slider = stepSlider({ label: 'Text size', stops: SIZES, value: S().textScale || 100, hint: 'Drag to preview. The size applies everywhere when you let go.', onPreview: paintPreview,
       onChange: async ([v]) => { try { await env.save({ textScale: v }); env.applyAppearance(); setValue('appearance', appearanceText()); } catch (e) { toast('Could not save the text size.'); console.error(e); } } });
     paintPreview(slider.current());
-    return [h('section', { class: 'panel stack' }, h('h3', { class: 'sx-sub' }, 'Theme'), themeOpts, h('h3', { class: 'sx-sub' }, 'Text size'), h('div', { class: 'size-control' }, slider.el, prev))];
+    slider.el.querySelector('label')?.classList.add('sr-only'); // the card already says "Text size"
+    return [h('section', { class: 'panel stack' }, h('h2', {}, 'Theme'), themeOpts), h('section', { class: 'panel stack' }, h('h2', {}, 'Text size'), h('div', { class: 'size-control' }, slider.el, prev))];
   };
 
   const privacy = () => {
     const hide = h('input', { type: 'checkbox', id: 'hide' }); hide.checked = !!S().hideAmounts;
     hide.addEventListener('change', async () => { await env.save({ hideAmounts: hide.checked }); env.applyAppearance(); env.flashAmounts(); env.paintChrome('settings'); setValue('privacy', hideText()); });
-    return [h('section', { class: 'panel stack' }, h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.')))];
+    return [h('section', { class: 'panel stack' }, h('h2', {}, 'Hide amounts'), h('label', { class: 'check check--switch', for: 'hide' }, hide, h('span', {}, 'Hide amounts on screen (percentages stay visible). You can also use the eye at the top.')))];
   };
 
   const device = () => [installPanel({ toast }),
-    h('section', { class: 'panel stack' }, h('h3', { class: 'sx-sub' }, 'Sample portfolio'), h('p', { class: 'sub' }, sampleLive ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'),
+    h('section', { class: 'panel stack' }, h('h2', {}, 'Sample portfolio'), h('p', { class: 'sub' }, sampleLive ? 'The sample portfolio is on this device. It is made up and can be removed without touching your own records.' : 'Adds a made-up portfolio (land, a rental flat, a car, a treasury bill and a partnership) so you can explore Apex before adding real records.'),
       sampleLive ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: (e) => withBusy(e.currentTarget, () => env.removeSample(ctx)) }, 'Remove the sample portfolio') : env.sampleButton(ctx))];
 
   const danger = () => [
-    h('section', { class: 'panel panel--danger stack' }, h('h3', { class: 'sx-sub' }, 'Create a new recovery key'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
+    h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Create a new recovery key'), h('p', { class: 'sub' }, 'Replaces your current recovery key with a new one. Save the new key somewhere safe straight away.'),
       h('button', { class: 'btn btn--danger', type: 'button', onclick: async () => {
         if (await confirmDialog({ title: 'Create a new recovery key?', body: 'Your current recovery key stops working. You will be shown the new one once, so have somewhere safe ready to keep it.', confirmLabel: 'Create new key', cancelLabel: 'Keep my key', danger: true })) actions.onRotateKey();
       } }, 'Create a new recovery key')),
-    h('section', { class: 'panel panel--danger stack' }, h('h3', { class: 'sx-sub' }, 'Remove my data from this device'), h('p', { class: 'sub' }, 'Deletes the copy of your records stored in this browser and signs you out, for example on a shared computer. Apex first checks that everything is backed up online; signing in again brings it all back.'),
+    h('section', { class: 'panel panel--danger stack' }, h('h2', {}, 'Remove my data from this device'), h('p', { class: 'sub' }, 'Deletes the copy of your records stored in this browser and signs you out, for example on a shared computer. Apex first checks that everything is backed up online; signing in again brings it all back.'),
       h('button', { class: 'btn btn--danger', type: 'button', onclick: actions.onWipe }, 'Remove my data from this device'))];
 
   const BUILD = {

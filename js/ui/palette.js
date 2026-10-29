@@ -5,7 +5,7 @@
 //
 //   openPalette({ load: async () => [{ id, group, label, sub, icon, keywords, run, searchOnly }], isAlive: () => true })
 //   searchOnly: true keeps an entry out of the list shown before anything is typed.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { icon } from './icons.js';
 
 let uid = 0, current = null;
@@ -72,7 +72,7 @@ export function openPalette({ load, isAlive = () => true, placeholder = 'Search 
         h('span', { class: 'palette-go', 'aria-hidden': 'true' }, icon('arrowRight', { size: 16 }))));
     });
     if (!shown.length) rows.push(h('li', { class: 'palette-none', role: 'presentation' }, loaded ? `Nothing matches “${q.trim()}”. Try a name, a page or a word like “lock”.` : 'Loading…'));
-    list.replaceChildren(...rows);
+    fill(list, ...rows);
     input.setAttribute('aria-activedescendant', shown.length ? `${id}-o${active}` : '');
     status.textContent = !loaded ? '' : shown.length ? `${shown.length} ${shown.length === 1 ? 'result' : 'results'}` : 'No results';
   }

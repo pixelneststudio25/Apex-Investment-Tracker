@@ -1,7 +1,7 @@
 // Screens for documents: add one to an investment (optionally for one ledger entry), open it, relabel or relink
 // it, delete it. The rules live in js/models/documents.js (tested); this file draws forms and runs the browser's
 // file picker and download. No inline styles, no innerHTML.
-import { h } from './dom.js';
+import { fill, h } from './dom.js';
 import { icon } from './icons.js';
 import { setBusy, withBusy } from './motion.js';
 import { fmtDate, todayISO } from './fmt.js';
@@ -180,7 +180,7 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
   const kind = previewKind(doc), stage = h('div', { class: 'doc-preview', hidden: true });
   let shown = null, showing = false;
   const load = () => readDocument({ files: ctx.files.api, getDek: ctx.files.getDek, userId: ctx.files.userId(), doc: current });
-  const clearPreview = () => { if (shown) { URL.revokeObjectURL(shown); shown = null; } stage.replaceChildren(); stage.hidden = true; showing = false; };
+  const clearPreview = () => { if (shown) { URL.revokeObjectURL(shown); shown = null; } fill(stage, ); stage.hidden = true; showing = false; };
   window.addEventListener('hashchange', clearPreview, { once: true });
   const fail = (x) => { err.textContent = failText(x); err.hidden = false; if (err.textContent.startsWith('Something went wrong')) console.error(x); };
   const previewLabel = h('span', {}, kind === 'pdf' ? 'Open in a new tab' : 'Preview');
@@ -194,7 +194,7 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
           const f = await load(), u = URL.createObjectURL(new Blob([f.bytes], { type: 'application/pdf' }));
           setTimeout(() => URL.revokeObjectURL(u), 10 * 60 * 1000);
           if (win && !win.closed) win.location.href = u;
-          else { stage.replaceChildren(h('a', { class: 'btn', href: u, target: '_blank', rel: 'noopener' }, icon('eye'), 'Tap to open the PDF')); stage.hidden = false; }
+          else { fill(stage, h('a', { class: 'btn', href: u, target: '_blank', rel: 'noopener' }, icon('eye'), 'Tap to open the PDF')); stage.hidden = false; }
         } catch (x) { win?.close(); fail(x); }
       });
     }
@@ -202,8 +202,8 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
     return withBusy(btn, async () => {
       try {
         const f = await load();
-        if (kind === 'image') { shown = URL.createObjectURL(new Blob([f.bytes], { type: previewMime(current) })); stage.replaceChildren(h('img', { class: 'doc-preview-img', src: shown, alt: documentTitle(current) })); }
-        else { const t = textPreview(f.bytes); stage.replaceChildren(h('pre', { class: 'doc-preview-text', tabindex: '0' }, t.text), t.truncated && h('p', { class: 'hint' }, 'Showing the start of the file. Download it to read the rest.')); }
+        if (kind === 'image') { shown = URL.createObjectURL(new Blob([f.bytes], { type: previewMime(current) })); fill(stage, h('img', { class: 'doc-preview-img', src: shown, alt: documentTitle(current) })); }
+        else { const t = textPreview(f.bytes); fill(stage, h('pre', { class: 'doc-preview-text', tabindex: '0' }, t.text), t.truncated && h('p', { class: 'hint' }, 'Showing the start of the file. Download it to read the rest.')); }
         stage.hidden = false; showing = true; previewLabel.textContent = 'Hide preview';
       } catch (x) { fail(x); }
     });
@@ -213,7 +213,7 @@ async function openScreen({ ctx, toast, go }, invId, docId) {
   const entryCell = h('dd', {});
   const paintEntry = () => {
     const e = linkedNow(current);
-    entryCell.replaceChildren(e ? h('a', { href: `${back}/entry/${e.id}` }, entryLabel(e)) : current.entryId ? 'The linked entry was deleted' : 'Not linked');
+    fill(entryCell, e ? h('a', { href: `${back}/entry/${e.id}` }, entryLabel(e)) : current.entryId ? 'The linked entry was deleted' : 'Not linked');
   };
   paintEntry();
 

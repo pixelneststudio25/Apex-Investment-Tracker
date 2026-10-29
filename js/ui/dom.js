@@ -22,3 +22,6 @@ export function svg(tag, props = {}, ...kids) {
   apply(el, props); append(el, kids);
   return el;
 }
+
+/** Replace an element's children, skipping false and null so a `cond && h(...)` never prints the word "false". */
+export function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false)); return el; }
