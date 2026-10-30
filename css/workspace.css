@@ -407,3 +407,15 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
    screen sideways (and the tab bar with it). */
 .ws-main, .ws-outlet, .flow, .flow > *, .panel, .stack > *, fieldset { min-width: 0; }
 .panel .input, .panel .seg, .panel select { max-width: 100%; }
+
+/* ---- Outlook charts (band and stacked areas). Colours are tokens only; no motion, so Reduce Motion needs nothing extra ---- */
+.chart .band { fill: color-mix(in srgb, var(--accent) 16%, transparent); stroke: none; }
+.chart .band-edge { fill: none; stroke: var(--accent); stroke-opacity: 0.45; stroke-width: 1.2; stroke-dasharray: 4 4; }
+.chart .line-base { fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round; }
+.chart .layer { stroke: var(--surface); stroke-width: 1; fill-opacity: 0.88; }
+.chart .layer-1 { fill: var(--chart-1); } .chart .layer-2 { fill: var(--chart-2); } .chart .layer-3 { fill: var(--chart-3); }
+.chart .layer-4 { fill: var(--chart-4); } .chart .layer-5 { fill: var(--chart-5); } .chart .layer-6 { fill: var(--chart-6); }
+.chart .bar-in { fill: var(--accent); } .chart .bar-out { fill: var(--chart-5); }
+.chart .hit:focus { outline: none; }
+.chart .hit:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.legend-inline .band-key::before { width: 18px; height: 10px; border: 0; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); }

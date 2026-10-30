@@ -26,7 +26,8 @@ test('every section has a title, an icon that exists, and search words', async (
 test('the list has every group, opens sections by route, and keeps every old destination reachable', async () => {
   const sv = await read('js/ui/settings-views.js');
   for (const g of ['Preferences', 'Your data', 'Backup', 'Security', 'Help', 'Account']) ok(sv.includes(`group('${g}'`), `missing group ${g}`);
-  for (const r of ['#/categories', '#/export', '#/deleted', '#/reminders', '#/projections']) ok(sv.includes(`'${r}'`), `no row for ${r}`);
+  for (const r of ['#/categories', '#/export', '#/deleted']) ok(sv.includes(`'${r}'`), `no row for ${r}`);
+  for (const r of ['#/reminders', '#/projections']) ok(!sv.includes(`'${r}'`), `${r} moved to the Outlook tab`);
   ok(sv.includes('`#/settings/${key}`'), 'section rows must use #/settings/<section>');
   for (const a of ['onSetPin', 'onCheckKey', 'onLock', 'onSignOut', 'onWipe', 'onRotateKey']) ok(sv.includes(`actions.${a}`), `no row for ${a}`);
 });
@@ -52,7 +53,7 @@ test('settings.css and settings-views.js are loaded by the page and cached offli
   ok(!/innerHTML|setAttribute\(\s*['"]style/.test(js));
 });
 
-test('back links: Help and Projections go back to Settings when you came from Settings, otherwise Home', () => {
+test('back links: Help goes back to Settings when you came from Settings, otherwise Home', () => {
   noteRoute(['home']);
   ok(backToOrigin().href === '#/' && backToOrigin().text === 'Home' && tabForShared() === 'home');
   noteRoute(['settings', 'appearance']);
@@ -61,16 +62,17 @@ test('back links: Help and Projections go back to Settings when you came from Se
   ok(getOrigin() === 'settings', 'Help itself must not change where you came from');
   noteRoute(['investments', 'abc']);
   ok(getOrigin() === 'investments' && backToOrigin().href === '#/');
-  noteRoute(['reminders']);
+  noteRoute(['deleted']);
   ok(getOrigin() === 'settings', 'pages that live in Settings always count as Settings');
+  noteRoute(['reminders']);
+  ok(getOrigin() === 'outlook' && backToOrigin().href === '#/outlook' && tabForShared() === 'outlook', 'Reminders and Outlook count as Outlook');
 });
-test('every page that lives in Settings links back to Settings', async () => {
+test('every page that lives in Settings links back to Settings (and Reminders back to Outlook)', async () => {
   const [mg, rp, cat, hp] = await Promise.all(['js/ui/manage-views.js', 'js/ui/report-views.js', 'js/ui/category-views.js', 'js/ui/help.js'].map(read));
-  ok(/backLink\('#\/settings', 'Settings'\), h\('div', \{ class: 'page-actions' \}, h\('h1', \{ class: 'page-title' \}, 'Reminders'\)/.test(mg), 'Reminders needs its back link');
+  ok(/backLink\('#\/outlook', 'Outlook'\), h\('div', \{ class: 'page-actions' \}, h\('h1', \{ class: 'page-title' \}, 'Reminders'\)/.test(mg), 'Reminders needs its back link to Outlook');
   ok(/backLink\('#\/settings', 'Settings'\), h\('h1', \{ class: 'page-title' \}, 'Recently deleted'\)/.test(mg), 'Recently deleted needs its back link');
   ok(rp.includes("backLink('#/settings', 'Settings'), h('h1', { class: 'page-title' }, 'Export and print')") && cat.includes("backLink('#/settings', 'Settings'), h('h1', { class: 'page-title' }, 'My categories')"));
-  ok(rp.includes('backToOrigin()') && !/backLink\(back, 'Projections'\)/.test(rp), 'projection screens follow where you came from');
-  ok(hp.includes('backToOrigin()') && !hp.includes("backLink('Home', '#/')"), 'Help follows where you came from');
+    ok(hp.includes('backToOrigin()') && !hp.includes("backLink('Home', '#/')"), 'Help follows where you came from');
 });
 test('fill() never prints the word "false": a missing section is simply absent', () => {
   const el = { replaceChildren(...k) { this.k = k; } };
@@ -83,7 +85,7 @@ test('no page replaces its contents with a bare replaceChildren (that is how "fa
   }
 });
 test('spacing tokens: every --space-N used by any stylesheet exists (a missing one silently removes the gap)', async () => {
-  const names = ['base', 'categories', 'components', 'documents', 'forms', 'help', 'home', 'manage', 'motion', 'picker', 'pin', 'reports', 'settings', 'sync', 'workspace'];
+  const names = ['base', 'categories', 'components', 'documents', 'forms', 'help', 'home', 'manage', 'motion', 'outlook', 'picker', 'pin', 'reports', 'settings', 'sync', 'workspace'];
   const tokens = await read('css/tokens.css');
   const have = new Set([...tokens.matchAll(/(--space-\d+)\s*:/g)].map((m) => m[1]));
   for (const n of names) for (const m of (await read(`css/${n}.css`)).matchAll(/var\((--space-\d+)/g)) ok(have.has(m[1]), `${n}.css uses ${m[1]}, which is not defined`);

@@ -1,0 +1,39 @@
+/* Outlook tab (Phase 12-iii). Tokens only; nothing here moves, so Reduce Motion needs no special case. */
+.ol { max-width: 60rem; }
+.ol-top { gap: var(--space-3); }
+.ol-label { margin: var(--space-3) 0 0; color: var(--text-muted); font-size: var(--fs-small); display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.ol-amount { margin: 0; font: 600 clamp(2rem, 9vw, 3rem)/1.1 var(--font-serif, var(--font-sans)); font-variant-numeric: tabular-nums lining-nums; overflow-wrap: anywhere; }
+.ol-gain { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); color: var(--text-muted); font-size: var(--fs-small); }
+.ol-note:empty { display: none; }
+.ol-switches { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3) var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+.ol-custom { max-width: 12rem; }
+.ol-legend { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin: var(--space-2) 0 0; padding: 0; list-style: none; font-size: var(--fs-caption); color: var(--text-muted); }
+.ol-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.ol-legend .swatch { flex: none; }
+.key { display: inline-block; flex: none; width: 18px; height: 10px; border-radius: 3px; }
+.key--line { height: 0; border-top: 3px solid var(--accent); border-radius: 0; }
+.key--band { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.key--in { background: var(--accent); }
+.key--out { background: var(--chart-5); }
+.ol-assume-row { display: flex; align-items: center; gap: var(--space-2); }
+.ol-pick { flex: 1 1 auto; min-width: 0; width: 100%; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.ol-reset { flex: none; margin-right: var(--space-2); }
+.dot { display: inline-block; width: 8px; height: 8px; margin-left: var(--space-2); border-radius: 50%; background: var(--accent); vertical-align: middle; }
+.chip--edited { color: var(--accent-strong); background: var(--accent-soft); }
+.chip--none { color: var(--text-muted); }
+.ol-timeline { border-left: 2px solid var(--border-strong); margin-left: var(--space-2); }
+.ol-goal { margin: 0; }
+.dialog--sheet { max-width: 30rem; max-height: 90vh; overflow-y: auto; }
+.dialog--sheet .sheet-body { display: grid; gap: var(--space-4); margin-top: var(--space-3); min-width: 0; }
+.dialog--sheet .sheet-body > * { min-width: 0; }
+.dialog--sheet .dialog-actions { margin-top: var(--space-3); }
+.ol .panel { min-width: 0; }
+
+/* rows on a narrow phone: the name gets the width, the amounts wrap underneath instead of squeezing it */
+.ol .row-line { flex-wrap: wrap; }
+.ol .row-main { flex: 1 1 9rem; min-width: 0; }
+.ol .row-end { flex: 0 0 auto; margin-left: auto; text-align: right; }
+.ol-assume .row-end { flex: 1 0 100%; display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin-left: 0; padding-left: 3.25rem; text-align: left; }
+.ol .readout strong { display: inline; }
+
+.ol-pick-static { flex: 1 1 auto; min-width: 0; }
