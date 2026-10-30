@@ -20,6 +20,7 @@ import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
+import { outlookView } from './outlook-views.js';
 import { documentView, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
 import { SETTINGS_SECTIONS, settingsView } from './settings-views.js';
@@ -145,7 +146,7 @@ export function mountWorkspace({ data, email, actions }) {
   let settings = null, token = 0, hashHandler = null, ctxCache = null;
 
   // ---------- chrome ----------
-  const NAV = [['home', '#/', 'Home', 'home'], ['investments', '#/investments', 'Investments', 'list'], ['settings', '#/settings', 'Settings', 'sliders']];
+  const NAV = [['home', '#/', 'Home', 'home'], ['investments', '#/investments', 'Investments', 'list'], ['outlook', '#/outlook', 'Outlook', 'trend'], ['settings', '#/settings', 'Settings', 'sliders']];
   const tabLinks = NAV.map(([key, href, label, ic]) => h('a', { class: 'tab', href, 'data-key': key }, icon(ic, { size: 22 }), label));
   const sideLinks = NAV.map(([key, href, label, ic]) => h('a', { href, 'data-key': key }, icon(ic), label));
   const sideNav = h('nav', { class: 'side-nav', 'aria-label': 'Main' }, sideLinks);
@@ -267,7 +268,7 @@ export function mountWorkspace({ data, email, actions }) {
       qa('plus', 'Add investment', { href: '#/new', 'aria-label': 'Add an investment' }),
       live.length > 0 && qa('coins', 'Income or cost', { onclick: pick('entry', 'Add an entry to which investment?'), 'aria-label': 'Record income or a cost' }),
       live.length > 0 && qa('chart', 'Update value', { onclick: pick('valuation', 'Add a valuation to which investment?'), 'aria-label': 'Update what an investment is worth' }),
-      qa('trend', 'Look ahead', { href: '#/projections/all', 'aria-label': 'Look ahead: projections for everything you hold' }));
+      qa('trend', 'Look ahead', { href: '#/outlook', 'aria-label': 'Look ahead: the outlook for everything you hold' }));
   }
   function investmentStrip(ctx, items) {
     const rank = (it) => [it.metrics.basis === 'realized' ? 1 : 0, -Number(it.metrics.currentValueKobo)];
@@ -410,7 +411,7 @@ export function mountWorkspace({ data, email, actions }) {
       h('div', { class: 'statement-hero' }, sparkline(tl),
         h('p', { class: 'statement-label' }, `Total value today · ${plural(sum.count.active, 'investment', 'investments')}`), heroBtn,
         h('p', { class: 'statement-sub' }, pill(sum.netGainKobo, sum.roi), h('span', {}, 'overall, counting income and sales')),
-        h('a', { class: 'look-ahead', href: '#/projections/all' }, 'Look ahead', icon('arrowRight', { size: 16 }))),
+        h('a', { class: 'look-ahead', href: '#/outlook' }, 'Look ahead', icon('arrowRight', { size: 16 }))),
       h('div', { class: 'statement-body' },
         quickActions(ctx, items),
         growth,
@@ -603,7 +604,7 @@ export function mountWorkspace({ data, email, actions }) {
     indicator(tabs, '[aria-selected="true"]');
     const actionsRow = h('div', { class: 'row row--actions' }, closed
       ? h('button', { class: 'btn btn--secondary', type: 'button', onclick: () => reopen(ctx, inv.id) }, 'Reopen this investment')
-      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/edit` }, 'Edit'), h('a', { class: 'btn btn--secondary', href: `#/projections/${inv.id}` }, 'Look ahead')]);
+      : [h('a', { class: 'btn', href: `#/investments/${inv.id}/entry` }, icon('plus'), 'Add entry'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/valuation` }, 'Add valuation'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/close` }, 'Close'), h('a', { class: 'btn btn--secondary', href: `#/investments/${inv.id}/edit` }, 'Edit'), h('a', { class: 'btn btn--secondary', href: `#/outlook/${inv.id}` }, 'Look ahead')]);
     return h('div', { class: 'flow' }, h('a', { class: 'back', href: '#/investments' }, icon('chevronLeft', { size: 18 }), 'Investments'), head, actionsRow, tabs, body);
   }
 
@@ -652,8 +653,7 @@ export function mountWorkspace({ data, email, actions }) {
       dismissed && cmd('Actions', 'Show the setup checklist', 'checkCircle', async () => { await ctx.store.meta.set('setupDismissed', null); if (location.hash === '#/' || location.hash === '') render({ keepScroll: true }); else go('#/'); }, 'getting started onboarding'),
       cmd('Go to', 'Home', 'home', () => go('#/'), 'dashboard overview'),
       cmd('Go to', 'Investments', 'list', () => go('#/investments'), 'list all'),
-      cmd('Go to', 'Projections', 'chart', () => go('#/projections'), 'look ahead what if future forecast scenario'),
-      cmd('Go to', 'Whole portfolio projection', 'chart', () => go('#/projections/all'), 'look ahead what if future forecast everything total'),
+      cmd('Go to', 'Outlook', 'trend', () => go('#/outlook'), 'look ahead projections projection what if future forecast scenario cautious optimistic goal inflation real terms cash flow maturities everything total'),
       cmd('Go to', 'Export and print', 'download', () => go('#/export'), 'csv spreadsheet excel download save'),
       cmd('Go to', 'Printable statement', 'doc', () => go('#/statement'), 'print pdf report statement'),
       cmd('Go to', 'Reminders', 'calendar', () => go('#/reminders'), 'dates due remind tax lease'),
@@ -690,12 +690,18 @@ export function mountWorkspace({ data, email, actions }) {
     const mine = ++token;
     const keepY = keepScroll ? window.scrollY : 0;
     quiet = keepScroll;
-    const parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    let parts = location.hash.replace(/^#\/?/, '').split('/').filter(Boolean);
+    // Old Projections links and bookmarks land on Outlook: #/projections and #/projections/all are the whole portfolio, #/projections/<id> is one investment.
+    if (parts[0] === 'projections') {
+      const to = parts[1] && parts[1] !== 'all' ? `#/outlook/${parts[1]}` : '#/outlook';
+      history.replaceState(null, '', to); parts = to.replace(/^#\/?/, '').split('/');
+    }
     const page = parts[0] || 'home';
     noteRoute(parts);
     // Help and Projections can be reached from Home or from Settings: the tab (and their back link) follow where you came from.
-    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'help' || page === 'projections' ? tabForShared()
-      : page === 'settings' || page === 'reminders' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
+    const key = page === 'investments' || page === 'new' ? 'investments' : page === 'help' ? tabForShared()
+      : page === 'outlook' || page === 'reminders' ? 'outlook'
+      : page === 'settings' || page === 'deleted' || page === 'export' || page === 'statement' || page === 'categories' ? 'settings' : 'home';
     paintChrome(key);
     // Adding or editing a record is a focused task: on phones the tab bar steps aside so the form has the screen.
     root.classList.toggle('is-focus', page === 'new' || (page === 'investments' && parts.length >= 3) || (page === 'reminders' && parts.length >= 2) || (page === 'categories' && parts.length >= 2));
@@ -710,7 +716,8 @@ export function mountWorkspace({ data, email, actions }) {
       else if (page === 'investments' && parts[1] && parts[2] === 'documents' && parts[3]) view = await documentView({ ctx, toast, go }, parts[1], parts[3], parts[4]);
       else if ((page === 'investments' && parts[1] && ['edit', 'schedule', 'history', 'shares'].includes(parts[2])) || page === 'reminders' || page === 'deleted') view = await manageView({ ctx, toast, go, actions }, parts);
       else if (page === 'categories') view = await categoryView({ ctx, toast, go }, parts);
-      else if (page === 'projections' || page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
+      else if (page === 'outlook') view = await outlookView({ ctx, toast, go, rerender: () => render({ keepScroll: true }) }, parts);
+      else if (page === 'export' || page === 'statement') view = await reportView({ ctx, toast, go, showAmounts }, parts);
       else if (page === 'investments' && parts[1] && parts[2]) view = await recordFormView({ ctx, invId: parts[1], kind: parts[2], recordId: parts[3], today: todayISO(), toast, go });
       else if (page === 'investments' && parts[1]) view = await detailView(ctx, parts[1]);
       else if (page === 'investments') view = await listView(ctx);

@@ -76,10 +76,7 @@ export async function settingsView(env, parts = []) {
       mk({ ic: 'tag', title: 'My categories', href: '#/categories' }),
       link('documents', 'paperclip', 'Documents backup', ''),
       mk({ ic: 'download', title: 'Export and print', href: '#/export' }),
-      mk({ ic: 'undo', title: 'Recently deleted', href: '#/deleted' }),
-      // Reminders and Projections move to the Outlook tab in Phase 12.
-      mk({ ic: 'calendar', title: 'Reminders', href: '#/reminders' }),
-      mk({ ic: 'trend', title: 'Projections', href: '#/projections' })]),
+      mk({ ic: 'undo', title: 'Recently deleted', href: '#/deleted' })]), // Reminders and Projections live on the Outlook tab now
     group('Backup', [link('backup', 'upload', 'Backup and sync', syncWord), link('device', 'sliders', 'This device', sampleLive ? 'Sample on' : '', { key: 'device' })]),
     group('Security', [
       mk({ ic: 'key', title: 'PIN', value: hasPin ? 'On' : 'Off', onclick: actions.onSetPin }),
