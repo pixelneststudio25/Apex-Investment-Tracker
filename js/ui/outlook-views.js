@@ -254,5 +254,5 @@ async function comingUp(ctx, asOf, onlyId) {
     u.amountKobo != null && h('div', { class: 'row-end' }, h('span', { class: `money ${u.kind === 'cost' ? 'loss' : 'gain'}` }, amtC(u.kind === 'cost' ? -u.amountKobo : u.amountKobo, { sign: true })), h('span', { class: 'row-sub' }, 'expected'))))))
     : miniEmpty('calendar', 'Nothing expected in the next 45 days. Rent, costs and reminders you set up will show here.');
   return h('section', { class: 'panel stack' }, sectionHead('Coming up', h('a', { class: 'link-btn', href: '#/reminders' }, 'Reminders')), rows,
-    h('a', { class: 'btn btn--secondary btn--small', href: '#/reminders/new' }, icon('plus'), 'Add a reminder'));
+    h('div', { class: 'row' }, h('a', { class: 'btn btn--secondary btn--small', href: '#/reminders/new' }, icon('plus'), 'Add a reminder'), h('a', { class: 'btn btn--secondary btn--small', href: '#/export' }, icon('calendar'), 'Put these in my calendar')));
 }

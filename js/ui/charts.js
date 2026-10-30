@@ -1,6 +1,7 @@
 // Hand-built SVG charts (no library). Colours come from CSS classes, so both themes just work and no inline
 // styles are needed. Every chart carries a text description for screen readers.
 import { svg } from './dom.js';
+import { haptic } from './haptics.js';
 import { formatNairaCompact } from '../engine/index.js';
 import { fmtDate, HIDDEN_TEXT, isHidden } from './fmt.js';
 
@@ -166,6 +167,7 @@ function scrub(f, { count, at, onHover, valueText, pick = null, dot: withDot = t
   root.append(cross, dot, hit);
   let current = null;
   const show = (i) => {
+    if (i !== current) haptic('tick');
     current = i;
     const x = X(i);
     cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');

@@ -1,6 +1,7 @@
 // Small building blocks for forms. Every field has a visible label, an optional hint, and its own error line
 // that screen readers announce. No inline styles and no innerHTML (the page's security policy forbids both).
 import { h } from './dom.js';
+import { haptic } from './haptics.js';
 import { icon } from './icons.js';
 import { parseNaira } from '../models/inputs.js';
 import { money } from './fmt.js';
@@ -117,7 +118,7 @@ export function choiceList({ name, options, value, onChange, label, icons = {} }
 // Two or three short options in a row, with a thumb that slides to the chosen one.
 export function segmented({ label, options, value, onChange }) {
   const g = h('div', { class: 'seg seg--slide', role: 'group', 'aria-label': label });
-  options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === value), onclick: () => { [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); onChange(v); } }, l)));
+  options.forEach(([v, l]) => g.append(h('button', { type: 'button', 'aria-pressed': String(v === value), onclick: () => { haptic('toggle'); [...g.children].forEach((b, i) => b.setAttribute('aria-pressed', String(options[i][0] === v))); onChange(v); } }, l)));
   slideThumb(g);
   return g;
 }
@@ -172,7 +173,7 @@ export function stepSlider({ label, stops, value, onPreview, onChange, hint }) {
 export function checkbox({ label, checked, onChange, asSwitch = false }) {
   const id = nextId('c');
   const el = h('input', { type: 'checkbox', id, checked: checked || undefined });
-  el.addEventListener('change', () => onChange(el.checked));
+  el.addEventListener('change', () => { if (asSwitch) haptic('toggle'); onChange(el.checked); });
   return h('label', { class: asSwitch ? 'check check--switch' : 'check', for: id }, el, h('span', {}, label));
 }
 

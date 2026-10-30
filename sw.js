@@ -1,7 +1,7 @@
 // Apex service worker. It keeps the app's own files on this device so Apex opens with no connection.
 // It never stores anything from the server (Supabase) and never stores records: those are already
 // encrypted in the browser's own database. Change VERSION whenever a file below is added or removed.
-const VERSION = 'apex-shell-9';
+const VERSION = 'apex-shell-11';
 const SHELL = [
   '/',
   '/index.html',
@@ -62,6 +62,7 @@ const SHELL = [
   '/js/engine/schedule.js',
   '/js/engine/value.js',
   '/js/engine/xirr.js',
+  '/js/models/calendar.js',
   '/js/models/categories.js',
   '/js/models/docbackup.js',
   '/js/models/documents.js',
@@ -90,6 +91,7 @@ const SHELL = [
   '/js/ui/fmt.js',
   '/js/ui/formkit.js',
   '/js/ui/forms.js',
+  '/js/ui/haptics.js',
   '/js/ui/help.js',
   '/js/ui/icons.js',
   '/js/ui/install-panel.js',

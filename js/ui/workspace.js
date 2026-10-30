@@ -20,6 +20,7 @@ import { helpLink, helpView } from './help.js';
 import { downloadText, statusChip } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
+import { setHaptics } from './haptics.js';
 import { outlookView } from './outlook-views.js';
 import { documentView, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
@@ -189,6 +190,7 @@ export function mountWorkspace({ data, email, actions }) {
   function applyAppearance() {
     document.documentElement.style.setProperty('--text-scale', String((settings.textScale || 100) / 100));
     setHidden(settings.hideAmounts);
+    setHaptics(settings.haptics);
   }
   // Plays the blur / focus animation on amounts for a moment after the hide setting changes.
   function flashAmounts() { const r = document.documentElement; r.classList.add('amt-anim'); setTimeout(() => r.classList.remove('amt-anim'), 700); }

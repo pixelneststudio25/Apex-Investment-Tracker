@@ -19,7 +19,7 @@ export function attemptsFromMessage(message, previous) {
   return m ? Number(m[1]) : Math.max(0, previous - 1);
 }
 
-const haptic = (pattern) => { try { navigator.vibrate?.(pattern); } catch { /* not supported */ } };
+import { haptic } from './haptics.js';
 
 // Padlock inside a soft ring. The shackle is its own path so it can lift when the PIN is right.
 function lockEmblem() {
@@ -55,14 +55,14 @@ function pinPad({ subtitle, onEntered, emblem, extraKey }) {
     fail(text, sr) {
       value = ''; dotsRow.classList.remove('busy', 'ok'); render(); setMsg(text, 'error', sr);
       dotsRow.classList.remove('shake', 'err'); void dotsRow.offsetWidth; dotsRow.classList.add('shake', 'err');
-      haptic([40, 70, 40]);
+      haptic('warn');
       setTimeout(() => dotsRow.classList.remove('shake', 'err'), 520);
     },
     // Right PIN: green dots and a check, the lock opens and the bloom spreads. Resolves when the moment is over (at once with reduced motion).
     success(text = 'Unlocked') {
       dotsRow.classList.remove('busy'); dotsRow.classList.add('ok');
       msg.className = 'pin-msg pin-msg--ok'; fill(msg, h('span', { class: 'pin-check', 'aria-hidden': 'true' }, icon('check')), text);
-      haptic([12, 50, 12]);
+      haptic('deny');
       emblem?.classList.add('open');
       if (prefersReducedMotion()) return Promise.resolve();
       if (emblem) {
@@ -76,7 +76,7 @@ function pinPad({ subtitle, onEntered, emblem, extraKey }) {
 
   async function press(d) {
     if (busy || value.length >= 4) return;
-    haptic(8);
+    haptic('tick');
     value += d; render();
     if (value.length < 4) return;
     busy = true; api.setBusy('Unlocking…');

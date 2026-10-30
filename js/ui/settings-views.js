@@ -3,6 +3,7 @@
 // On a wide screen the list stays on the left and the chosen section shows on the right, using the same routes.
 // workspace.js passes in what it owns (settings, toast, repainting); nothing here uses innerHTML or inline styles.
 import { h } from './dom.js';
+import { haptic, hapticsSupported } from './haptics.js';
 import { icon } from './icons.js';
 import { stepSlider } from './formkit.js';
 import { confirmDialog } from './dialog.js';
@@ -137,7 +138,12 @@ export async function settingsView(env, parts = []) {
       onChange: async ([v]) => { try { await env.save({ textScale: v }); env.applyAppearance(); setValue('appearance', appearanceText()); } catch (e) { toast('Could not save the text size.'); console.error(e); } } });
     paintPreview(slider.current());
     slider.el.querySelector('label')?.classList.add('sr-only'); // the card already says "Text size"
-    return [h('section', { class: 'panel stack' }, h('h2', {}, 'Theme'), themeOpts), h('section', { class: 'panel stack' }, h('h2', {}, 'Text size'), h('div', { class: 'size-control' }, slider.el, prev))];
+    const buzz = h('input', { type: 'checkbox', id: 'buzz' }); buzz.checked = !!S().haptics;
+    buzz.addEventListener('change', async () => { try { await env.save({ haptics: buzz.checked }); env.applyAppearance(); haptic('success'); } catch (e) { buzz.checked = !buzz.checked; toast('Could not save that. Try again.'); } });
+    const touch = h('section', { class: 'panel stack' }, h('h2', {}, 'Touch feedback'),
+      h('label', { class: 'check check--switch', for: 'buzz' }, buzz, h('span', {}, 'A light tap on your finger when you move along a chart or flip a switch.')),
+      !hapticsSupported() && h('p', { class: 'hint' }, 'This device does not allow web apps to vibrate (iPhones and iPads do not). The setting is kept for your other devices.'));
+    return [h('section', { class: 'panel stack' }, h('h2', {}, 'Theme'), themeOpts), h('section', { class: 'panel stack' }, h('h2', {}, 'Text size'), h('div', { class: 'size-control' }, slider.el, prev)), touch];
   };
 
   const privacy = () => {

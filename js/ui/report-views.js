@@ -9,14 +9,16 @@ import { helpLink } from './help.js';
 import { formatNaira } from '../engine/index.js';
 import { InputError, checkDate } from '../models/inputs.js';
 import { KIND_LABEL, SOURCE_LABEL, buildStatement, csvName, ledgerCsv, loadReport, summaryCsv, valuationsCsv } from '../models/export.js';
+import { CALENDAR_RANGES, buildIcs, calendarName, collectCalendarEvents } from '../models/calendar.js';
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 const backLink = (href, text) => h('a', { class: 'back', href }, icon('chevronLeft', { size: 18 }), text);
 const amt = (kobo, opts = {}) => h('span', { class: 'amt' }, amtText(kobo, { compact: false, ...opts }));
 
 // A plain download of text as a file. Used for CSV; the backup file has its own helper in sync-ui.js.
-export function downloadCsv(filename, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+export function downloadCsv(filename, text) { downloadText(filename, text, 'text/csv;charset=utf-8'); }
+export function downloadText(filename, text, type) {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = h('a', { href: url, download: filename });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
@@ -65,10 +67,36 @@ async function exportScreen({ ctx }) {
       h('p', { class: 'sub' }, 'These open in Excel, Google Sheets and similar programs. Amounts are plain naira with two decimals, and money leaving you is minus. Deleted investments are left out.'),
       dateField.el, h('ul', { class: 'rows export-list' }, kinds.map(button)), say,
       h('p', { class: 'alert alert--warn' }, 'These files are not encrypted. Your records in Apex are, but a downloaded file is plain text. Keep it somewhere private and delete it when you no longer need it.')),
+    calendarPanel(ctx, sample),
     h('section', { class: 'panel stack' }, h('h2', {}, 'Printable statement'),
       h('p', { class: 'sub' }, 'A clean page of your figures, as at a date you choose, ready to print or save as a PDF from the print window.'),
       h('div', { class: 'row' }, h('a', { class: 'btn', href: '#/statement' }, icon('doc'), 'Open the statement'))),
     h('p', { class: 'sub' }, helpLink('projections-export', 'How export and statements work')));
+}
+
+// The dates Apex is watching, as a file any calendar app can import. Made on this device.
+function calendarPanel(ctx, sample) {
+  let months = 12, details = false;
+  const say = h('p', { class: 'sync-result', role: 'status', hidden: true });
+  const range = field('How far ahead', selectInput({ value: String(months), options: CALENDAR_RANGES.map(([m, l]) => [String(m), l]), onChange: (v) => { months = Number(v); } }));
+  const withDetails = checkbox({ label: 'Include amounts and investment names', checked: false, asSwitch: true, onChange: (v) => { details = v; } });
+  const btn = h('button', { class: 'btn btn--secondary', type: 'button' }, icon('calendar'), 'Download calendar (.ics)');
+  btn.addEventListener('click', async () => {
+    setBusy(btn, true); say.hidden = true;
+    try {
+      const asOf = todayISO(), { events, truncated } = await collectCalendarEvents({ pf: ctx.pf, store: ctx.store, asOf, months, details });
+      say.hidden = false;
+      if (!events.length) { say.dataset.tone = 'ok'; say.textContent = 'Nothing is coming up in that time, so there is nothing to put in a calendar yet. Add a reminder or a payment plan first.'; return; }
+      downloadText(calendarName(asOf), buildIcs(events, { name: 'Apex', truncated }), 'text/calendar;charset=utf-8');
+      say.dataset.tone = 'ok'; say.textContent = `Saved ${calendarName(asOf)} with ${events.length} ${events.length === 1 ? 'date' : 'dates'}${truncated ? ' (the first 1000)' : ''}. Open it to add them to your calendar.`;
+    } catch (e) { say.hidden = false; say.dataset.tone = 'bad'; say.textContent = 'Could not create the file. Please try again.'; console.error(e); }
+    finally { setBusy(btn, false); }
+  });
+  return h('section', { class: 'panel stack' }, h('h2', {}, 'Calendar'),
+    h('p', { class: 'sub' }, 'Your reminders and the payments your saved plans expect, as all-day dates in your calendar app. Made on this device from your records. Importing the file again updates the dates instead of doubling them.'),
+    range.el, withDetails, btn, say,
+    h('p', { class: 'alert alert--warn' }, 'Calendar apps often sync to a cloud service, and the file is not encrypted. By default a payment shows only as "Payment expected", with no amount or investment name. Turn the switch on only if you are happy for those to appear in your calendar.'),
+    sample && h('p', { class: 'sub' }, 'The sample portfolio is included while it is on this device.'));
 }
 
 // ================= The printable statement =================
