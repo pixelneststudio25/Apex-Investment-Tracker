@@ -31,7 +31,7 @@ export const EXAMPLE = (() => {
 const X = EXAMPLE.text;
 
 // ---------- where "Try it now" and the sample portfolio can point ----------
-export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help', '#/projections', '#/export', '#/categories']);
+export const STATIC_ROUTES = Object.freeze(['#/', '#/investments', '#/new', '#/settings', '#/help', '#/outlook', '#/export', '#/categories']);
 export const RECORD_KINDS = Object.freeze(['entry', 'valuation', 'close']); // #/investments/<id>/<kind>, see js/ui/forms.js
 export const TRY_ACTIONS = Object.freeze(['palette']);
 // The sample portfolio is created in this order (js/models/sample.js), and its ids are kept in order in the store.
@@ -251,21 +251,23 @@ export const TOPICS = Object.freeze([
     keywords: 'search palette command keyboard shortcut ctrl k jump find',
   },
   {
-    id: 'projections-export', title: 'Looking ahead, exporting and printing', icon: 'chart', tint: 5,
+    id: 'projections-export', title: 'Looking ahead (Outlook), exporting and printing', icon: 'chart', tint: 5,
     summary: 'Try a what-if rate, download your records for a spreadsheet, or print a clean statement.',
     lead: 'Three things for when you want to look past today or hand your figures to someone else. A projection is a what-if and never a fact. Files and statements are plain copies of what you already recorded.',
     mock: { type: 'statement' },
     steps: [
-      { title: 'Open Projections', text: 'Choose Look ahead on an open investment, or open Projections from Settings or from search. Closed investments have nothing left to project.' },
-      { title: 'Or look at everything at once', text: 'On the Projections page, choose Whole portfolio. Each open investment uses its own saved rate unless you type one rate for all of them. An investment with no saved rate is held at its worth today and named, never guessed. Shared investments count at their full value, the same as on Home.' },
-      { title: 'Type a yearly rate', text: 'For example 12 for twelve percent a year. If the investment already has a rate, Apex fills it in as a starting answer, and you can change it. Choose whether it grows or loses value, and whether it is simple or compounded.' },
-      { title: 'Compare a second scenario', text: 'Fill in Scenario B to see two rates side by side, with the difference at 1, 3, 5 and 10 years. You can add one more number of years of your own.', more: 'valuations-rates' },
-      { title: 'Read the answer as a what-if', text: 'Every table is marked Projection. It starts from what the investment is worth today and assumes the rate holds every year. Regular payments you set up, such as rent, are included from tomorrow on. Payments already due but not recorded are never counted, because Apex does not assume money arrived.', more: 'income-costs' },
+      { title: 'Open Outlook', text: 'Choose Outlook in the bottom bar, or choose Look ahead on Home or on an open investment. Outlook shows everything you hold, and Look ahead on a single investment shows just that one. Closed investments have nothing left to project.' },
+      { title: 'Pick how far ahead', text: 'Choose 1, 3, 5 or 10 years, or Custom for any whole number up to 50. The answer changes the moment you choose, with no button to press.' },
+      { title: 'See what each investment assumes', text: 'Under Assumptions, each open investment shows the rate it uses and where it came from: Saved, Edited, or None. An investment with no saved rate is held at its worth today and named, never guessed. Tap one to try a different rate. Nothing real changes, and Reset puts the saved rate back.' },
+      { title: 'Try Cautious, Base or Optimistic', text: 'Cautious moves every growth rate three points lower and Optimistic three points higher. You can also type your own number of points. Investments with no rate stay flat.' },
+      { title: 'Keep what you try', text: 'Your edited rates, the years, the scenario and your inflation figure are remembered for you automatically, encrypted like everything else, and they are there on your other devices too. To keep a set for later, type a name under Saved scenarios and choose Save these choices. You can keep up to 5, and Load or Delete them any time. Only your choices are saved, never a result.' },
+      { title: 'Real terms, and your own share', text: 'Turn on Real terms and type a yearly inflation figure of your choosing to see every future amount in present-day naira. Apex does not pick the figure for you. If you share investments, choose Full value or My share.', more: 'valuations-rates' },
+      { title: 'Read the answer as a what-if', text: 'Everything on Outlook is marked Projection. It starts from what each investment is worth today and uses the rates shown. A term investment stops growing on its maturity date. Regular payments you set up, such as rent, are included from tomorrow on. Payments already due but not recorded are never counted, because Apex does not assume money arrived.', more: 'income-costs' },
       { title: 'Download your records', text: 'Under Export and print, download the ledger, the valuations or a summary as a CSV file. Amounts are plain naira with two decimals, and money leaving you is minus.' },
       { title: 'Print a statement', text: 'Open the statement, choose a date, and use Print or save as PDF. You can include every entry and valuation, or print one investment on its own. Amounts must be showing, so turn off Hide amounts first.' },
     ],
-    tryIt: { label: 'Open Projections', route: '#/projections' },
-    goodToKnow: 'A downloaded file is not encrypted. Your records inside Apex are, but a file on your phone or computer is plain text, so keep it somewhere private. Nothing you try in Projections is saved.',
+    tryIt: { label: 'Open Outlook', route: '#/outlook' },
+    goodToKnow: 'A downloaded file is not encrypted. Your records inside Apex are, but a file on your phone or computer is plain text, so keep it somewhere private. Nothing you try in Outlook changes your real figures.',
     glossary: ['projection'], faq: [],
     sample: null,
     keywords: 'projection forecast what if future scenario export csv spreadsheet excel download print statement pdf report',

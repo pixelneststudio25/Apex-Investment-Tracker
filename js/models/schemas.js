@@ -5,7 +5,7 @@
 import { dayNumber } from '../engine/dates.js';
 
 export const RECORD_SCHEMA_VERSION = 1;
-export const TYPES = ['settings', 'categoryTemplate', 'investment', 'entry', 'schedule', 'valuation', 'partner', 'ownership', 'document', 'reminder'];
+export const TYPES = ['settings', 'categoryTemplate', 'investment', 'entry', 'schedule', 'valuation', 'partner', 'ownership', 'document', 'reminder', 'outlookPlan'];
 export const ENTRY_KINDS = ['capital_in', 'cost', 'income', 'payout', 'proceeds', 'repayment'];
 export const VALUE_CHANGES = ['none', 'appreciation', 'depreciation', 'interest', 'manualOnly'];
 export const INCOME_MODES = ['none', 'schedule', 'irregular'];
@@ -214,6 +214,20 @@ const SCHEMAS = {
     recurrence: O(oneOf(['none', 'monthly', 'quarterly', 'yearly']), 'none'), done: O(bool, false),
   }),
 };
+
+// What the Outlook tab remembers (Phase 12-iv): the edited rates, how far ahead, the scenario, real terms and the target.
+// 'working' is the one record that follows you around; 'named' ones are scenarios you saved on purpose. Settings only;
+// no result is ever stored, so every figure is worked out fresh and stays a projection.
+const planOverride = obj({
+  investmentId: R(ref), percent: R(str(12)), direction: R(oneOf(['grows', 'loses'])), method: R(oneOf(['simple', 'compound1', 'compound12'])),
+});
+SCHEMAS.outlookPlan = obj({
+  kind: R(oneOf(['working', 'named'])), name: O(text(60), ''),
+  years: O(int(1, 50), 5), preset: O(oneOf(['', 'cautious', 'base', 'optimistic']), 'base'),
+  nudgeText: O(text(10), ''), nudgeDir: O(oneOf(['down', 'up']), 'down'),
+  share: O(oneOf(['full', 'mine']), 'full'), real: O(bool, false), inflationText: O(text(10), ''), goalText: O(text(30), ''),
+  overrides: O(list(planOverride, 100), []),
+}, (v) => { if (v.kind === 'named' && !v.name) bad('name', 'a saved scenario needs a name'); });
 
 export function validate(type, data) {
   const schema = SCHEMAS[type];
