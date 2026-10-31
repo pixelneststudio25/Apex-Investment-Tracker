@@ -1,7 +1,7 @@
 // Apex service worker. It keeps the app's own files on this device so Apex opens with no connection.
 // It never stores anything from the server (Supabase) and never stores records: those are already
 // encrypted in the browser's own database. Change VERSION whenever a file below is added or removed.
-const VERSION = 'apex-shell-11';
+const VERSION = 'apex-shell-12';
 const SHELL = [
   '/',
   '/index.html',
@@ -93,6 +93,7 @@ const SHELL = [
   '/js/ui/forms.js',
   '/js/ui/haptics.js',
   '/js/ui/help.js',
+  '/js/ui/hero.js',
   '/js/ui/icons.js',
   '/js/ui/install-panel.js',
   '/js/ui/manage-views.js',
@@ -105,6 +106,7 @@ const SHELL = [
   '/js/ui/sheet.js',
   '/js/ui/pin-views.js',
   '/js/ui/report-views.js',
+  '/js/ui/swipe.js',
   '/js/ui/sync-ui.js',
   '/js/ui/wizard.js',
   '/js/ui/workspace.js',

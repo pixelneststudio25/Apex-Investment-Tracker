@@ -21,6 +21,8 @@ import { downloadText, statusChip } from './sync-ui.js';
 import { manageView } from './manage-views.js';
 import { reportView } from './report-views.js';
 import { setHaptics } from './haptics.js';
+import { hasHero, heroSwap } from './hero.js';
+import { bindSwipe } from './swipe.js';
 import { outlookView } from './outlook-views.js';
 import { documentView, documentsSection } from './document-views.js';
 import { categoryView } from './category-views.js';
@@ -144,7 +146,7 @@ export function mountWorkspace({ data, email, actions }) {
   const outlet = h('div', { class: 'ws-outlet' });
   const avatar = h('span', { class: 'avatar', 'aria-hidden': 'true' }), userName = h('p', { class: 'side-user-name' }), userSub = h('p', { class: 'side-user-sub' });
   const hideBtn = h('button', { class: 'icon-btn', type: 'button' });
-  let settings = null, token = 0, hashHandler = null, ctxCache = null;
+  let settings = null, token = 0, hashHandler = null, ctxCache = null, shownDetail = null;
 
   // ---------- chrome ----------
   const NAV = [['home', '#/', 'Home', 'home'], ['investments', '#/investments', 'Investments', 'list'], ['outlook', '#/outlook', 'Outlook', 'trend'], ['settings', '#/settings', 'Settings', 'sliders']];
@@ -285,9 +287,9 @@ export function mountWorkspace({ data, email, actions }) {
     };
     return h('section', { 'aria-label': 'Your investments' }, sectionHead('Your investments', h('a', { class: 'see-all', href: '#/investments' }, 'See all')),
       h('ul', { class: 'cards' }, shown.map(({ investment: inv, metrics: m }) => { const c = ctx.cat(inv.categoryId);
-        return h('li', {}, h('a', { class: 'inv-card', href: `#/investments/${inv.id}` },
-          h('span', { class: `tile ${tintOf(inv.categoryId)}` }, icon(c.icon)),
-          h('span', { class: 'inv-card-name' }, inv.name), h('span', { class: 'inv-card-sub' }, m.basis === 'realized' ? `${c.name}, closed` : c.name),
+        return h('li', {}, h('a', { class: 'inv-card', href: `#/investments/${inv.id}`, 'data-inv': inv.id },
+          h('span', { class: `tile ${tintOf(inv.categoryId)}`, 'data-hero': 'tile' }, icon(c.icon)),
+          h('span', { class: 'inv-card-name', 'data-hero': 'name' }, inv.name), h('span', { class: 'inv-card-sub' }, m.basis === 'realized' ? `${c.name}, closed` : c.name),
           h('span', { class: 'inv-card-val money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi), share(m)));
       })));
   }
@@ -464,6 +466,16 @@ export function mountWorkspace({ data, email, actions }) {
   }
 
   // ---------- Investments list ----------
+  // One open investment in the list, with quick actions behind it for a swipe (or the Left arrow key).
+  function swipeRow(inv, link) {
+    const act = (href, label, ic, cls = '') => h('a', { class: `swipe-btn ${cls}`.trim(), href, tabindex: '-1', 'aria-label': `${label}: ${inv.name}` }, icon(ic, { size: 20 }), h('span', {}, label));
+    const actions = h('div', { class: 'swipe-actions', 'aria-hidden': 'true' }, act(`#/investments/${inv.id}/entry`, 'Add entry', 'plus'), act(`#/investments/${inv.id}/valuation`, 'Update value', 'trend', 'swipe-btn--alt'));
+    const front = h('div', { class: 'swipe-front' }, link);
+    const li = h('li', { class: 'swipe-row' }, actions, front);
+    bindSwipe({ li, front, actions, link });
+    return li;
+  }
+
   async function listView(ctx) {
     const asOf = todayISO();
     const items = await ctx.pf.overview(asOf);
@@ -491,16 +503,18 @@ export function mountWorkspace({ data, email, actions }) {
       shown.sort((x, y) => (isClosed(x) - isClosed(y)) || (worth(y) - worth(x))); // open ones first, biggest first
       const ul = shown.length ? h('ul', { class: 'rows' }, shown.map((it, n) => {
         const inv = it.investment, c = ctx.cat(inv.categoryId), m = it.metrics;
-        const li = h('li', {}, h('a', { class: 'row-line', href: `#/investments/${inv.id}` },
-          h('span', { class: `tile ${tintOf(inv.categoryId)}` }, icon(c.icon)), // a photo can replace the icon here later
-          h('div', { class: 'row-main' }, h('div', { class: 'row-title' }, inv.name, m?.basis === 'realized' && h('span', { class: 'chip' }, 'Closed')),
+        const link = h('a', { class: 'row-line', href: `#/investments/${inv.id}`, 'data-inv': inv.id },
+          h('span', { class: `tile ${tintOf(inv.categoryId)}`, 'data-hero': 'tile' }, icon(c.icon)), // a photo can replace the icon here later
+          h('div', { class: 'row-main' }, h('div', { class: 'row-title', 'data-hero': 'name' }, inv.name, m?.basis === 'realized' && h('span', { class: 'chip' }, 'Closed')),
             h('div', { class: 'row-sub' }, m?.basis === 'realized' ? `${c.name}, closed ${fmtDate(inv.closedOn || m.asOf)}` : `${c.name}, since ${fmtMonthYear(inv.openedOn)}`)),
           it.error ? h('div', { class: 'row-end' }, h('span', { class: 'row-sub overdue' }, 'Cannot be calculated'))
-            : h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi))));
+            : h('div', { class: 'row-end' }, h('span', { class: 'money' }, amt(m.currentValueKobo)), pillPct(m.netGainKobo, m.roi)));
+        // Open investments can be swiped left for quick actions (touch); the same actions are on the page and on the keyboard.
+        const li = it.error || m.basis === 'realized' ? h('li', {}, link) : swipeRow(inv, link);
         if (first) rise(li, Math.min(n, 8) * 0.6);
         return li;
       })) : noMatch();
-      fill(listBox, ul);
+      fill(listBox, shown.some((it) => !it.error && it.metrics.basis !== 'realized') && h('p', { class: 'hint swipe-hint' }, 'Swipe a row left for quick actions.'), ul);
       first = false;
       [...seg.children].forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.f === filter)));
     };
@@ -537,8 +551,8 @@ export function mountWorkspace({ data, email, actions }) {
     const ann = m.annualized;
     const annText = ann.rate == null ? 'Not available yet' : `${pct(ann.rate)} a year`;
     const head = h('section', { class: 'panel statement' },
-      h('div', { class: 'detail-head' }, h('span', { class: 'tile tile--large' }, icon(c.icon, { size: 28 })), // photo slot: an image can replace the icon later
-        h('div', {}, h('h1', { class: 'page-title' }, inv.name), h('p', { class: 'sub' }, `${c.name}, ${closed ? 'closed' : 'active'} since ${fmtMonthYear(inv.openedOn)}`))),
+      h('div', { class: 'detail-head', 'data-inv': inv.id }, h('span', { class: 'tile tile--large', 'data-hero': 'tile' }, icon(c.icon, { size: 28 })), // photo slot: an image can replace the icon later
+        h('div', {}, h('h1', { class: 'page-title', 'data-hero': 'name' }, inv.name), h('p', { class: 'sub' }, `${c.name}, ${closed ? 'closed' : 'active'} since ${fmtMonthYear(inv.openedOn)}`))),
       h('p', { class: 'statement-label' }, closed ? 'Sold for' : 'Worth today'), heroValue,
       h('p', { class: 'sub' }, basisText),
       h('p', { class: 'sub statement-sub' }, pill(m.netGainKobo, m.roi), ' in total, counting income and costs'),
@@ -727,10 +741,14 @@ export function mountWorkspace({ data, email, actions }) {
       else if (page === 'help') view = await helpScreen(ctx, parts);
       else view = await homeView(ctx);
       if (mine !== token) return;
-      paintChrome(key);
-      fill(outlet, view);
-      if (!keepScroll && !view.dataset?.noenter) enter(view);
-      if (keepScroll) window.scrollTo({ top: keepY, left: 0, behavior: 'instant' }); else window.scrollTo(0, 0);
+      const swap = () => { paintChrome(key); fill(outlet, view); if (keepScroll) window.scrollTo({ top: keepY, left: 0, behavior: 'instant' }); else window.scrollTo(0, 0); };
+      // Going to an investment's page glides its icon and name from the card or row you tapped; going back glides them home.
+      const target = page === 'investments' && parts[1] && !parts[2] ? parts[1] : null;
+      const glideId = keepScroll ? null : (target && hasHero(view, target) ? target : shownDetail && hasHero(view, shownDetail) ? shownDetail : null);
+      const glided = glideId ? await heroSwap({ outlet, view, id: glideId, swap }) : false;
+      if (mine !== token) return;
+      if (!glided) { swap(); if (!keepScroll && !view.dataset?.noenter) enter(view); }
+      shownDetail = target;
     } catch (e) {
       if (mine !== token || (e instanceof StoreError && e.code === 'LOCKED')) return;
       fill(outlet, h('p', { class: 'alert alert--error', role: 'alert' }, e instanceof StoreError || e.code === 'INVALID' ? e.message : 'Something went wrong while reading your records. Reload the page and try again.'));
