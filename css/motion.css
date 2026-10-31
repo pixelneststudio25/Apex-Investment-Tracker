@@ -58,6 +58,10 @@ html.is-booting.boot-done .splash { animation: splash-out var(--dur-slow) var(--
 html[data-vt="page"]::view-transition-old(root) { animation: fade-out 120ms var(--ease-out) both; }
 html[data-vt="page"]::view-transition-new(root) { animation: fade var(--dur-base) var(--ease-out) both; }
 @keyframes fade-out { to { opacity: 0; } }
+/* shared-element glide of an investment's icon and name between a card or row and its page */
+html[data-vt="hero"]::view-transition-old(root) { animation: fade-out 140ms var(--ease-out) both; }
+html[data-vt="hero"]::view-transition-new(root) { animation: fade 240ms var(--ease-out) both; }
+html[data-vt="hero"]::view-transition-group(inv-tile), html[data-vt="hero"]::view-transition-group(inv-name) { animation-duration: 340ms; animation-timing-function: var(--ease-out); }
 html[data-vt="theme"]::view-transition-old(root), html[data-vt="theme"]::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html[data-vt="theme"]::view-transition-old(root) { z-index: 1; }
 html[data-vt="theme"]::view-transition-new(root) { z-index: 2; }

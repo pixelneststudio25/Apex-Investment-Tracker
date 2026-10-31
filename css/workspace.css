@@ -419,3 +419,16 @@ kbd { display: inline-flex; align-items: center; justify-content: center; min-wi
 .chart .hit:focus { outline: none; }
 .chart .hit:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
 .legend-inline .band-key::before { width: 18px; height: 10px; border: 0; border-radius: 3px; background: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* ---- Swipe actions on investment list rows (touch). The row slides over two buttons; reduced motion removes the slide ---- */
+.swipe-row { position: relative; overflow: hidden; margin: 0 calc(var(--space-3) * -1); border-radius: var(--radius-input); }
+.swipe-row .row-line { margin: 0; }
+.swipe-actions { position: absolute; inset: 0 0 0 auto; display: flex; width: calc(var(--swipe-w, 168px)); }
+.swipe-btn { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 0 var(--space-2); background: var(--accent); color: var(--on-accent); font-size: var(--fs-caption); font-weight: 600; text-align: center; text-decoration: none; }
+.swipe-btn--alt { background: var(--accent-soft); color: var(--accent-strong); }
+.swipe-btn:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -4px; }
+.swipe-front { position: relative; background: var(--surface); transform: translateX(var(--swipe-x, 0px)); transition: transform var(--dur-base) var(--ease-out); touch-action: pan-y; }
+.swipe-front.dragging { transition: none; }
+@media (prefers-reduced-motion: reduce) { .swipe-front { transition: none; } }
+.swipe-hint { display: none; margin: 0 0 var(--space-2); }
+@media (pointer: coarse) { .swipe-hint { display: block; } }
